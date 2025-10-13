@@ -7,3 +7,20 @@ type User struct {
 	Name  string
 	Email string `gorm:"unique"`
 }
+
+type Tag struct {
+	gorm.Model
+	Title string
+}
+
+type Bookmarks struct {
+	gorm.Model
+	Title       string `grom:"unique"`
+	Url         string
+	Favicon     string
+	Description string
+	Tags        []Tag
+	Pinned      bool
+	IsArchived  bool
+	VisitCount  int
+}
