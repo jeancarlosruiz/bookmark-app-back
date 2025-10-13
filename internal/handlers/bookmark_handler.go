@@ -16,12 +16,12 @@ func GetBookmarks(c *gin.Context) {
 	c.JSON(http.StatusOK, bookmarks)
 }
 
-func CreateBookmark(c *gin.Context){
-  var bookmark []models.Bookmarks
-  if err := c.ShouldBindJSON(&bookmark); err != nil {
-    c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-  }
+func CreateBookmark(c *gin.Context) {
+	var bookmark []models.Bookmarks
+	if err := c.ShouldBindJSON(&bookmark); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
 
-  database.DB.Create(&bookmark)
-  c.JSON(http.StatusOK, bookmark)
+	database.DB.Create(&bookmark)
+	c.JSON(http.StatusOK, bookmark)
 }
