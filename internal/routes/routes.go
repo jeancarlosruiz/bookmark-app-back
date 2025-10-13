@@ -9,7 +9,13 @@ func Setup(router *gin.Engine) {
 	api := router.Group("/api")
 
 	{
+		// Users
 		api.GET("/users", handlers.GetUsers)
 		api.POST("/users", handlers.CreateUser)
+
+		//Bookmarks
+		api.GET("/bookmark", handlers.GetBookmarks)
+		api.POST("/bookmark", handlers.CreateBookmark)
+
 	}
 }

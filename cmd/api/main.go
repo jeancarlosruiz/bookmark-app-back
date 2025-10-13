@@ -19,7 +19,7 @@ func main() {
 		panic("Failed to connect to DB" + err.Error())
 	}
 
-	database.DB.AutoMigrate(&models.User{})
+	database.DB.AutoMigrate(&models.User{}, &models.Bookmarks{}, &models.Tag{}, &models.BookmarkTag{})
 
 	router := gin.Default()
 	routes.Setup(router)
