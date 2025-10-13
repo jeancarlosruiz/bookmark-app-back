@@ -22,6 +22,9 @@ func main() {
 	database.DB.AutoMigrate(&models.User{}, &models.Bookmarks{}, &models.Tag{}, &models.BookmarkTag{})
 
 	router := gin.Default()
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
+
 	routes.Setup(router)
 
 	port := config.GetPort()

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,8 @@ import (
 func GetUsers(c *gin.Context) {
 	var users []models.User
 	database.DB.Find(&users)
+
+  fmt.Println("Depues de el middleware")
 	c.JSON(http.StatusOK, users)
 }
 
