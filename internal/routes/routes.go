@@ -3,21 +3,23 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/handlers"
-	"github.com/jeancarlosruiz/bookmark-app-back/internal/middleware"
+	// "github.com/jeancarlosruiz/bookmark-app-back/internal/middleware"
 )
 
 func Setup(router *gin.Engine) {
-	api := router.Group("/api")
+	protected := router.Group("/api")
+  // Ponerlo al final
+  // protected.Use(middleware.Protect)
 
   // Agrupar todas las rutas con el middleware deseado
 	{
 		// Users
-		api.GET("/users", middleware.Protect, handlers.GetUsers)
-		api.POST("/users", handlers.CreateUser)
+		protected.GET("/users",  handlers.GetUsers)
+		protected.POST("/users", handlers.CreateUser)
 
 		//Bookmarks
-		api.GET("/bookmark", handlers.GetBookmarks)
-		api.POST("/bookmark", handlers.CreateBookmark)
+		protected.GET("/bookmark", handlers.GetBookmarks)
+		protected.POST("/bookmark", handlers.CreateBookmark)
 
 	}
 }
