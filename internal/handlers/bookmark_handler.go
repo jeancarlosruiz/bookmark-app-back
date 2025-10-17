@@ -25,3 +25,29 @@ func CreateBookmark(c *gin.Context) {
 	database.DB.Create(&bookmark)
 	c.JSON(http.StatusOK, bookmark)
 }
+
+func GetBookmarkByID(c *gin.Context) {
+	var bookmarks []models.Bookmarks
+
+	result := database.DB.First(&bookmarks)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Error al obtener bookmark" + result.Error.Error(),
+		})
+
+		return
+	}
+
+	if len(bookmarks) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se encontraron bookmarks",
+			"data":    []models.Bookmarks{},
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmarks obtenidos exitosamente",
+		"data":    bookmarks,
+	})
+}

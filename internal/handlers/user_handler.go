@@ -10,17 +10,27 @@ import (
 
 func GetUsers(c *gin.Context) {
 	var users []models.User
-	database.DB.Find(&users)
+	result := database.DB.Where("deleted_at IS NULL").Order("created_at DESC").Find(&users)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Error al obtener usuarios " + result.Error.Error(),
+		})
 
-	c.JSON(http.StatusOK, users)
-}
-
-func CreateUser(c *gin.Context) {
-	var user []models.User
-	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	database.DB.Create(&user)
-	c.JSON(http.StatusOK, user)
+	if len(users) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se encontraron usuarios",
+			"data":    []models.User{},
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Usuarios obtenidos exitosamente",
+		"data":    users,
+	})
+
 }

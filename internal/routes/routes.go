@@ -15,10 +15,10 @@ func Setup(router *gin.Engine) {
 	{
 		// Users
 		protected.GET("/users",  handlers.GetUsers)
-		protected.POST("/users", handlers.CreateUser)
 
 		//Bookmarks
 		protected.GET("/bookmark", handlers.GetBookmarks)
+    protected.GET("/bookmark/{id}", handlers.GetBookmarkByID)
 		protected.POST("/bookmark", handlers.CreateBookmark)
 
 	}
