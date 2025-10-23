@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +12,7 @@ import (
 func GetBookmarks(c *gin.Context) {
 	var bookmarks []models.Bookmarks
 
-	database.DB.Find(&bookmarks)
+	database.DB.Preload("User").Find(&bookmarks)
 
 	c.JSON(http.StatusOK, bookmarks)
 }
@@ -27,9 +28,12 @@ func CreateBookmark(c *gin.Context) {
 }
 
 func GetBookmarkByID(c *gin.Context) {
-	var bookmarks []models.Bookmarks
+	bookmarkID := c.Param("id")
 
-	result := database.DB.First(&bookmarks)
+	fmt.Println("Bookmark ID: ", bookmarkID)
+
+	var bookmark models.Bookmarks
+	result := database.DB.Preload("User").Where("id = ?", bookmarkID).First(&bookmark)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -39,11 +43,33 @@ func GetBookmarkByID(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark obtenido exitosamente",
+		"data":    bookmark,
+	})
+}
+
+func GetBookmarkByUserID(c *gin.Context) {
+	userID := c.Param("user_id")
+
+	fmt.Println("User ID: ", userID)
+
+	var bookmarks []models.Bookmarks
+	result := database.DB.Preload("User").Where("user_id = ?", userID).Find(&bookmarks)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Error al obtener bookmarks para este usuario: " + result.Error.Error(),
+		})
+		return
+	}
+
 	if len(bookmarks) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "No se encontraron bookmarks",
+			"message": "No se encontraron bookmarks para este usuario",
 			"data":    []models.Bookmarks{},
 		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
