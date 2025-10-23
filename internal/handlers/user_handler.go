@@ -10,6 +10,7 @@ import (
 
 func GetUsers(c *gin.Context) {
 	var users []models.User
+	// solo para probar
 	result := database.DB.Where("deleted_at IS NULL").Order("created_at DESC").Find(&users)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
