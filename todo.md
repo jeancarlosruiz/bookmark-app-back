@@ -26,10 +26,10 @@
 ### Día 4
 [x] Añadir middlewares.
 [x] Probar endpoints con Postman.
-[] Crear endpoints de signup para que guarde UserID (de neo auth), nombre y demas informacion necesaria.
+[x] Crear endpoints de signup para que guarde UserID (de neo auth), nombre y demas informacion necesaria.
 
 ### Día 5
-[] Implementar `PUT /bookmarks/:id` y `DELETE /bookmarks/:id`.
+[] Implementar `PUT /bookmarks/:id` y `DELETE /bookmarks/:id`. (Para actualizar deberia leer y buscar como seria la mejor forma de crear una validacion y como ponerla en los middleware quizas dividir mejor services, controller, middleware, validators)
 [] Validar campos y relaciones.
 
 ---

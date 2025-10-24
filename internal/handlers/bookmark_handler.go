@@ -77,3 +77,38 @@ func GetBookmarkByUserID(c *gin.Context) {
 		"data":    bookmarks,
 	})
 }
+
+func UpdateBookmark(c *gin.Context) {
+	bookmarkID := c.Param("id")
+
+	fmt.Println("Bookmark id:", bookmarkID)
+
+}
+
+func DeleteBookmark(c *gin.Context) {
+	bookmarkID := c.Param("id")
+
+	var bookmark models.Bookmarks
+	result := database.DB.Where("id = ?", bookmarkID).Find(&bookmark)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al encontrar el bookmark" + result.Error.Error(),
+		})
+
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se encontro bookmark con este id" + bookmarkID,
+			"data":    bookmark,
+		})
+	}
+
+	result.Update("isActive = ?", true)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "bookmark actualizado correctamente",
+	})
+}

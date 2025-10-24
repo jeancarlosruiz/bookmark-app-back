@@ -21,6 +21,8 @@ func Setup(router *gin.Engine) {
 		protected.GET("/bookmark/:id", handlers.GetBookmarkByID)
 		protected.POST("/bookmark", handlers.CreateBookmark)
 		protected.GET("/bookmark/user/:user_id", handlers.GetBookmarkByUserID)
+		protected.PUT("/bookmark/update/:id", handlers.UpdateBookmark)
+		protected.PUT("/bookmark/delete/:id", handlers.DeleteBookmark)
 
 	}
 }
