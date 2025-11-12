@@ -19,7 +19,8 @@ func main() {
 		panic("Failed to connect to DB" + err.Error())
 	}
 
-	database.DB.AutoMigrate(&models.User{}, &models.Bookmarks{}, &models.Tag{}, &models.BookmarkTag{})
+	// Note: User table is NOT migrated as it exists in external auth schema (neon_auth.users_sync)
+	database.DB.AutoMigrate(&models.Bookmarks{}, &models.Tag{}, &models.BookmarkTag{})
 
 	router := gin.Default()
 	router.Use(gin.Logger())

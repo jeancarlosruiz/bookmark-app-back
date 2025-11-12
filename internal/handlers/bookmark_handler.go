@@ -33,7 +33,7 @@ func GetBookmarkByID(c *gin.Context) {
 	fmt.Println("Bookmark ID: ", bookmarkID)
 
 	var bookmark models.Bookmarks
-	result := database.DB.Preload("User").Where("id = ?", bookmarkID).First(&bookmark)
+	result := database.DB.Where("id = ?", bookmarkID).First(&bookmark)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -55,7 +55,7 @@ func GetBookmarkByUserID(c *gin.Context) {
 	fmt.Println("User ID: ", userID)
 
 	var bookmarks []models.Bookmarks
-	result := database.DB.Preload("User").Where("user_id = ?", userID).Find(&bookmarks)
+	result := database.DB.Preload("Tags").Where("user_id = ?", userID).Where("is_active = ?", true).Find(&bookmarks)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -78,18 +78,44 @@ func GetBookmarkByUserID(c *gin.Context) {
 	})
 }
 
-func UpdateBookmark(c *gin.Context) {
-	bookmarkID := c.Param("id")
-
-	fmt.Println("Bookmark id:", bookmarkID)
-
-}
-
 func DeleteBookmark(c *gin.Context) {
 	bookmarkID := c.Param("id")
 
 	var bookmark models.Bookmarks
 	result := database.DB.Where("id = ?", bookmarkID).Find(&bookmark)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Erro al encontrar el bookmark" + result.Error.Error(),
+		})
+
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se encontro bookmark con este id" + bookmarkID,
+			"data":    bookmark,
+		})
+
+		return
+	}
+
+	database.DB.Model(&bookmark).Update("is_active", false)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "El bookmark fue eliminado correctamente " + bookmarkID,
+	})
+
+}
+
+func UpdateBookmark(c *gin.Context) {
+	bookmarkID := c.Param("id")
+
+	var bookmark models.Bookmarks
+	result := database.DB.Where("id = ?", bookmarkID).Find(&bookmark)
+
+	fmt.Println("Bookmark id:", bookmarkID)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -104,11 +130,8 @@ func DeleteBookmark(c *gin.Context) {
 			"message": "No se encontro bookmark con este id" + bookmarkID,
 			"data":    bookmark,
 		})
+
+		return
 	}
 
-	result.Update("isActive = ?", true)
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "bookmark actualizado correctamente",
-	})
 }
