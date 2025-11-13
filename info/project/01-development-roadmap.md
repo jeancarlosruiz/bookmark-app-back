@@ -48,13 +48,13 @@
 
 ### Día 7
 
-- Endpoint para creación de bookmark con tags relacionados.
-- Relación many-to-many `bookmark_tags`.
+[] Endpoint para creación de bookmark con tags relacionados.
+[x] Relación many-to-many `bookmark_tags`.
 
 ### Día 8
 
-- Endpoint `/bookmarks/search?q=title`.
-- Endpoint `/bookmarks?tags=tag1,tag2`.
+[] Endpoint `/bookmarks/search?q=title`.
+[] Endpoint `/bookmarks?tags=tag1,tag2`.
 
 ### Día 9
 

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
+	"github.com/jeancarlosruiz/bookmark-app-back/internal/validator"
 )
 
 func GetBookmarks(c *gin.Context) {
@@ -18,13 +19,38 @@ func GetBookmarks(c *gin.Context) {
 }
 
 func CreateBookmark(c *gin.Context) {
-	var bookmark []models.Bookmarks
-	if err := c.ShouldBindJSON(&bookmark); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+
+	payload, exist := c.Get("payload")
+
+	if !exist {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Validation payload not found",
+		})
+
+		return
 	}
 
-	database.DB.Create(&bookmark)
-	c.JSON(http.StatusOK, bookmark)
+	bookmarkData := payload.(validator.CreateBookmark)
+
+	bookmark := models.Bookmarks{
+		Title:  bookmarkData.Title,
+		Url:    bookmarkData.Url,
+		UserID: bookmarkData.UserID,
+	}
+
+	if err := database.DB.Create(&bookmark).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Failed to create bookmark",
+			"data":    err.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Bookmark created successfully",
+		"data":    bookmark,
+	})
 }
 
 func GetBookmarkByID(c *gin.Context) {
