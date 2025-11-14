@@ -65,13 +65,16 @@ func SeedDatabase(userID string) error {
 			if existingTag, exists := tagMap[tagName]; exists {
 				tags = append(tags, *existingTag)
 			} else {
-				// Check if tag exists in database
+				// Check if tag exists in database for this user
 				var tag models.Tag
-				result := DB.Where("title = ?", tagName).First(&tag)
+				result := DB.Where("title = ? AND user_id = ?", tagName, userID).First(&tag)
 
 				if result.Error != nil {
 					// Create new tag
-					tag = models.Tag{Title: tagName}
+					tag = models.Tag{
+						Title:  tagName,
+						UserID: userID,
+					}
 					if err := DB.Create(&tag).Error; err != nil {
 						fmt.Printf("⚠️  Warning: Failed to create tag '%s': %v\n", tagName, err)
 						continue
