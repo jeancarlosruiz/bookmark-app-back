@@ -179,7 +179,11 @@ func DeleteBookmark(c *gin.Context) {
 		return
 	}
 
-	database.DB.Model(&bookmark).Update("is_active", false)
+	// database.DB.Model(&bookmark).Update("is_active", false)
+
+	// Condicionar eliminar si el usuario (Tomado del protect) es el mismo dueno de userID
+
+	database.DB.Where("id = ?", bookmarkID).Delete(&bookmark)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "El bookmark fue eliminado correctamente " + bookmarkID,

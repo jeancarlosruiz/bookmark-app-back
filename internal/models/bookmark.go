@@ -13,7 +13,6 @@ type Bookmarks struct {
 	Favicon     string
 	Description string
 	Pinned      bool  `gorm:"default:false"`
-	IsActive    bool  `gorm:"default:true"`
 	IsArchived  bool  `gorm:"default:false"`
 	VisitCount  int   `gorm:"default:0"`
 	Tags        []Tag `gorm:"many2many:bookmark_tags;foreignKey:ID;joinForeignKey:BookmarkID;References:ID;joinReferences:TagID"`
