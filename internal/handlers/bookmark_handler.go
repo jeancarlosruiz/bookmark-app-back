@@ -3,11 +3,13 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/validator"
+	"gorm.io/gorm"
 )
 
 func GetBookmarks(c *gin.Context) {
@@ -32,13 +34,61 @@ func CreateBookmark(c *gin.Context) {
 
 	bookmarkData := payload.(validator.CreateBookmark)
 
+	var tags []models.Tag
+	tagMap := make(map[string]models.Tag)
+
+	for _, tagName := range bookmarkData.Tags {
+		// sin espacios
+		tagName = strings.TrimSpace(tagName)
+
+		if tagName == "" {
+			continue // Saltar tags vacios
+		}
+
+		// verificar si ya procesamos este tag en este request
+
+		if existingTag, exists := tagMap[tagName]; exists {
+			tags = append(tags, existingTag)
+			continue
+		}
+
+		// buscar en la base de datos
+		var tag models.Tag
+		result := database.DB.Where(&models.Tag{Title: tagName, UserID: bookmarkData.UserID}).First(&tag)
+
+		if result.Error == gorm.ErrRecordNotFound {
+			tag = models.Tag{Title: tagName, UserID: bookmarkData.UserID}
+			if err := database.DB.Create(&tag).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": "Failed to create tag: " + tagName,
+					"error":   err.Error(),
+				})
+				return
+			}
+		}
+
+		tagMap[tagName] = tag
+		tags = append(tags, tag)
+	}
+
 	bookmark := models.Bookmarks{
 		Title:  bookmarkData.Title,
 		Url:    bookmarkData.Url,
 		UserID: bookmarkData.UserID,
+		Tags:   tags,
+	}
+
+	if err := database.DB.Where(&models.Bookmarks{Title: bookmarkData.Title, Url: bookmarkData.Url, UserID: bookmarkData.UserID}).First(&bookmark); err == nil {
+
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "Bookmark with this title or URL already exists",
+		})
+
+		return
 	}
 
 	if err := database.DB.Create(&bookmark).Error; err != nil {
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "Failed to create bookmark",
 			"data":    err.Error(),
@@ -46,6 +96,8 @@ func CreateBookmark(c *gin.Context) {
 
 		return
 	}
+
+	database.DB.Preload("Tags").First(&bookmark, bookmark.ID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Bookmark created successfully",
@@ -59,7 +111,7 @@ func GetBookmarkByID(c *gin.Context) {
 	fmt.Println("Bookmark ID: ", bookmarkID)
 
 	var bookmark models.Bookmarks
-	result := database.DB.Where("id = ?", bookmarkID).First(&bookmark)
+	result := database.DB.Preload("Tags").Where("id = ?", bookmarkID).First(&bookmark)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

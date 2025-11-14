@@ -8,8 +8,8 @@ import (
 
 type Bookmarks struct {
 	gorm.Model
-	Title       string `gorm:"unique;not null"`
-	Url         string `gorm:"unique;not null;index"`
+	Title       string `gorm:"not null"`
+	Url         string `gorm:"not null;index"`
 	Favicon     string
 	Description string
 	Pinned      bool  `gorm:"default:false"`
