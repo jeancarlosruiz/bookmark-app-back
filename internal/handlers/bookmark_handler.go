@@ -145,13 +145,92 @@ func GetBookmarkByUserID(c *gin.Context) {
 	if len(bookmarks) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "No se encontraron bookmarks para este usuario",
-			"data":    []models.Bookmarks{},
+			"data":    bookmarks,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Bookmarks obtenidos exitosamente",
+		"data":    bookmarks,
+	})
+}
+
+// Mejorar
+func SearchBookmarkByTags(c *gin.Context) {
+	query := c.Query("q")
+	var tagList = strings.Split(query, ",")
+
+	var searchList []string
+
+	for _, tag := range tagList {
+
+		tag = strings.TrimSpace(strings.ToLower(tag))
+
+		if tag == "" {
+			continue
+		}
+
+		searchList = append(searchList, tag)
+
+	}
+
+	var bookmarks []models.Bookmarks
+
+	result := database.DB.Model(&models.Bookmarks{}).Preload("Tags").Joins("JOIN bookmark_tags bt ON bt.bookmark_id = bookmarks.id").Joins("JOIN tags t ON t.id = bt.tag_id").Where("LOWER(t.title) IN ?", searchList).Find(&bookmarks)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al buscar bookmark " + result.Error.Error(),
+			"error":   result.Error.Error(),
+		})
+
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No bookmarks encontrados",
+			"data":    []models.Bookmarks{},
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark encontrados satifactoriamente",
+		"data":    bookmarks,
+	})
+
+}
+
+func SearchBookmarkByTitle(c *gin.Context) {
+	bookmarkTitle := c.Query("q")
+	// Aqui deberia ir tambien el UserID
+
+	var bookmarks []models.Bookmarks
+	result := database.DB.Where("title ILIKE ?", "%"+bookmarkTitle+"%").Preload("Tags").Find(&bookmarks)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al buscar bookmark " + result.Error.Error(),
+			"error":   result.Error.Error(),
+		})
+
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se encontro bookmark con este title: " + bookmarkTitle,
+			"data":    []models.Bookmarks{},
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark encontrados satifactoriamente",
 		"data":    bookmarks,
 	})
 }

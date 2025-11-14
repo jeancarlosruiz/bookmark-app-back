@@ -53,8 +53,8 @@
 
 ### Día 8
 
-[] Endpoint `/bookmarks/search?q=title`.
-[] Endpoint `/bookmarks?tags=tag1,tag2`.
+[x] Endpoint `/bookmarks/search?q=title`.01-
+[x] Endpoint `/bookmarks?tags=tag1,tag2`.
 
 ### Día 9
 

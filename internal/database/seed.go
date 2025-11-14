@@ -11,16 +11,16 @@ import (
 )
 
 type BookmarkSeed struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	URL         string    `json:"url"`
-	Favicon     string    `json:"favicon"`
-	Description string    `json:"description"`
-	Tags        []string  `json:"tags"`
-	Pinned      bool      `json:"pinned"`
-	IsArchived  bool      `json:"isArchived"`
-	VisitCount  int       `json:"visitCount"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	URL         string     `json:"url"`
+	Favicon     string     `json:"favicon"`
+	Description string     `json:"description"`
+	Tags        []string   `json:"tags"`
+	Pinned      bool       `json:"pinned"`
+	IsArchived  bool       `json:"isArchived"`
+	VisitCount  int        `json:"visitCount"`
+	CreatedAt   time.Time  `json:"createdAt"`
 	LastVisited *time.Time `json:"lastVisited"`
 }
 
@@ -94,7 +94,6 @@ func SeedDatabase(userID string) error {
 			Favicon:     bookmarkSeed.Favicon,
 			Description: bookmarkSeed.Description,
 			Pinned:      bookmarkSeed.Pinned,
-			IsActive:    true,
 			IsArchived:  bookmarkSeed.IsArchived,
 			VisitCount:  bookmarkSeed.VisitCount,
 			Tags:        tags,
@@ -110,8 +109,8 @@ func SeedDatabase(userID string) error {
 		if err := DB.Create(&bookmark).Error; err != nil {
 			// Check if it's a foreign key constraint error - fail fast
 			if strings.Contains(err.Error(), "fk_bookmarks_user") ||
-			   strings.Contains(err.Error(), "foreign key constraint") ||
-			   strings.Contains(err.Error(), "violates foreign key") {
+				strings.Contains(err.Error(), "foreign key constraint") ||
+				strings.Contains(err.Error(), "violates foreign key") {
 				return fmt.Errorf("❌ Foreign key constraint error: User ID '%s' does not exist in neon_auth.users_sync.\n   This should not happen as we validated the user earlier.\n   Error: %w", userID, err)
 			}
 
