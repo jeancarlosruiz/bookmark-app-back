@@ -58,13 +58,13 @@
 
 ### Día 9
 
-- Añadir campos `view_count`, `last_visited_at`.
-- Endpoint para incrementar visitas.
+[] Añadir campos `view_count`, `last_visited_at`.
+[] Endpoint para incrementar visitas.
 
 ### Día 10
 
-- Campos booleanos `is_pinned`, `is_archived`.
-- Endpoints de actualización rápida.
+[] Campos booleanos `is_pinned`, `is_archived`.
+[] Endpoints de actualización rápida.
 
 ---
 
