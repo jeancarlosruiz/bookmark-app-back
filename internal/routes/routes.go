@@ -11,7 +11,7 @@ func Setup(router *gin.Engine) {
 	protected := router.Group("/api")
 	bookmarkCtrl := controllers.NewBookmarkController()
 	// Ponerlo al final
-	// protected.Use(middleware.Protect)
+	protected.Use(middleware.Protect)
 
 	// Agrupar todas las rutas con el middleware deseado
 	{

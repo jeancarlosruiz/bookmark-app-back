@@ -45,7 +45,7 @@ func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (
 		return nil, err
 	}
 
-	bookmark, err = s.bookmarkRepo.FindByIDWithTags(bookmark.ID)
+	bookmark, err = s.bookmarkRepo.FindByIDWithTags(bookmark.ID, bookmark.UserID)
 
 	if err != nil {
 		return nil, err
@@ -54,9 +54,9 @@ func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (
 	return bookmark, nil
 }
 
-func (s *BookmarkService) FindByIDWithTagsService(id uint) (*models.Bookmarks, error) {
+func (s *BookmarkService) FindByIDWithTagsService(id uint, userID string) (*models.Bookmarks, error) {
 
-	bookmark, err := s.bookmarkRepo.FindByIDWithTags(id)
+	bookmark, err := s.bookmarkRepo.FindByIDWithTags(id, userID)
 
 	if err != nil {
 		return nil, err
@@ -82,24 +82,9 @@ func (s *BookmarkService) FindByUserIDWithTagService(userID string) ([]models.Bo
 
 }
 
-func (s *BookmarkService) FindBookmarksByTagsService(tags []string) ([]models.Bookmarks, error) {
+func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID string) ([]models.Bookmarks, error) {
 
-	bookmarks, err := s.bookmarkRepo.FindByTags(tags)
-
-	if err == gorm.ErrRecordNotFound {
-		return nil, ErrBookmarksNotFound
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return bookmarks, nil
-}
-
-func (s *BookmarkService) FindBookmarkByTitleService(title string) ([]models.Bookmarks, error) {
-
-	bookmarks, err := s.bookmarkRepo.FindBookmarkByTitle(title)
+	bookmarks, err := s.bookmarkRepo.FindByTags(tags, userID)
 
 	if err == gorm.ErrRecordNotFound {
 		return nil, ErrBookmarksNotFound
@@ -112,8 +97,23 @@ func (s *BookmarkService) FindBookmarkByTitleService(title string) ([]models.Boo
 	return bookmarks, nil
 }
 
-func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint) (*models.Bookmarks, error) {
-	bookmark, err := s.bookmarkRepo.SoftDeleteBookmarkByID(id)
+func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string) ([]models.Bookmarks, error) {
+
+	bookmarks, err := s.bookmarkRepo.FindBookmarkByTitle(title, userID)
+
+	if err == gorm.ErrRecordNotFound {
+		return nil, ErrBookmarksNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmarks, nil
+}
+
+func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint, userID string) (*models.Bookmarks, error) {
+	bookmark, err := s.bookmarkRepo.SoftDeleteBookmarkByID(id, userID)
 
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 	}
 
 	if len(updates) > 0 {
-		_, err := s.bookmarkRepo.UpdateBookmarkByID(id, updates)
+		_, err := s.bookmarkRepo.UpdateBookmarkByID(id, userID, updates)
 
 		if err != nil {
 			return nil, err
@@ -166,7 +166,7 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 
 	}
 
-	return s.bookmarkRepo.FindByIDWithTags(id)
+	return s.bookmarkRepo.FindByIDWithTags(id, userID)
 }
 
 var (

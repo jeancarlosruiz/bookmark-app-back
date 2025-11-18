@@ -64,6 +64,7 @@ func (ctrl *BookmarkController) CreateBookmark(c *gin.Context) {
 
 func (ctrl *BookmarkController) GetBookmarkByID(c *gin.Context) {
 	bookmarkIDStr := c.Param("id")
+	userID := c.GetString("user_id")
 
 	bookmarkID, err := strconv.Atoi(bookmarkIDStr)
 
@@ -76,7 +77,7 @@ func (ctrl *BookmarkController) GetBookmarkByID(c *gin.Context) {
 		return
 	}
 
-	bookmark, err := ctrl.service.FindByIDWithTagsService(uint(bookmarkID))
+	bookmark, err := ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
 
 	if err != nil {
 
@@ -131,6 +132,8 @@ func (ctrl *BookmarkController) GetBookmarkByUserID(c *gin.Context) {
 // Mejorar
 func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 	query := c.Query("q")
+	userID := c.GetString("user_id")
+
 	var tagList = strings.Split(query, ",")
 
 	var searchList []string
@@ -147,7 +150,7 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 
 	}
 
-	bookmarks, err := ctrl.service.FindBookmarksByTagsService(searchList)
+	bookmarks, err := ctrl.service.FindBookmarksByTagsService(searchList, userID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -177,8 +180,9 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 func (ctrl *BookmarkController) SearchBookmarkByTitle(c *gin.Context) {
 	bookmarkTitle := c.Query("q")
 	// Aqui deberia ir tambien el UserID
+	userID := c.GetString("user_id")
 
-	bookmarks, err := ctrl.service.FindBookmarkByTitleService(bookmarkTitle)
+	bookmarks, err := ctrl.service.FindBookmarkByTitleService(bookmarkTitle, userID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -206,7 +210,7 @@ func (ctrl *BookmarkController) SearchBookmarkByTitle(c *gin.Context) {
 
 func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
 	bookmarkIDStr := c.Param("id")
-	// Condicionar eliminar si el usuario (Tomado del protect) es el mismo dueno de userID
+	userID := c.GetString("user_id")
 
 	bookmarkID, err := strconv.Atoi(bookmarkIDStr)
 
@@ -219,7 +223,7 @@ func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
 		return
 	}
 
-	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID))
+	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
 
 	if err != nil {
 
@@ -238,7 +242,7 @@ func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
 		return
 	}
 
-	_, err = ctrl.service.SoftDeleteBookmarkByIDService(uint(bookmarkID))
+	_, err = ctrl.service.SoftDeleteBookmarkByIDService(uint(bookmarkID), userID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -256,7 +260,7 @@ func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
 
 func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
 	bookmarkIDStr := c.Param("id")
-	// Condicionar eliminar si el usuario (Tomado del protect) es el mismo dueno de userID
+	userID := c.GetString("user_id")
 
 	bookmarkID, err := strconv.Atoi(bookmarkIDStr)
 
@@ -269,7 +273,7 @@ func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
 		return
 	}
 
-	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID))
+	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
 
 	if err != nil {
 
@@ -300,7 +304,7 @@ func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
 
 	bookmarkData := payload.(validator.UpdateBookmark)
 
-	bookmarkUpdated, err := ctrl.service.UpdateBookmarkService(uint(bookmarkID), "user_id", bookmarkData)
+	bookmarkUpdated, err := ctrl.service.UpdateBookmarkService(uint(bookmarkID), userID, bookmarkData)
 
 	if err != nil {
 

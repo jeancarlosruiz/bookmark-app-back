@@ -36,9 +36,9 @@ func (r *BookmarkRepository) Create(bookmark *models.Bookmarks) error {
 	return r.db.Create(bookmark).Error
 }
 
-func (r *BookmarkRepository) FindByIDWithTags(id uint) (*models.Bookmarks, error) {
+func (r *BookmarkRepository) FindByIDWithTags(id uint, userID string) (*models.Bookmarks, error) {
 	var bookmark models.Bookmarks
-	err := r.db.Preload("Tags").First(&bookmark, id).Error
+	err := r.db.Preload("Tags").Where("id = ? AND user_id = ?", id, userID).First(&bookmark).Error
 
 	if err != nil {
 		return nil, err
@@ -59,10 +59,10 @@ func (r *BookmarkRepository) FindByUserIDWithTags(userID string) ([]models.Bookm
 	return bookmarks, nil
 }
 
-func (r *BookmarkRepository) FindByTags(tags []string) ([]models.Bookmarks, error) {
+func (r *BookmarkRepository) FindByTags(tags []string, userID string) ([]models.Bookmarks, error) {
 
 	var bookmarks []models.Bookmarks
-	err := r.db.Model(&models.Bookmarks{}).Preload("Tags").Joins("JOIN bookmark_tags bt ON bt.bookmark_id = bookmarks.id").Joins("JOIN tags t ON t.id = bt.tag_id").Where("LOWER(t.title) IN ?", tags).Find(&bookmarks).Error
+	err := r.db.Model(&models.Bookmarks{}).Preload("Tags").Joins("JOIN bookmark_tags bt ON bt.bookmark_id = bookmarks.id").Joins("JOIN tags t ON t.id = bt.tag_id").Where("LOWER(t.title) IN ?", tags).Where("bookmarks.user_id = ?", userID).Find(&bookmarks).Error
 
 	if err != nil {
 		return nil, err
@@ -71,10 +71,10 @@ func (r *BookmarkRepository) FindByTags(tags []string) ([]models.Bookmarks, erro
 	return bookmarks, nil
 }
 
-func (r *BookmarkRepository) FindBookmarkByTitle(title string) ([]models.Bookmarks, error) {
+func (r *BookmarkRepository) FindBookmarkByTitle(title string, userID string) ([]models.Bookmarks, error) {
 
 	var bookmarks []models.Bookmarks
-	err := r.db.Where("title ILIKE ?", "%"+title+"%").Preload("Tags").Find(&bookmarks).Error
+	err := r.db.Where("user_id = ?", userID).Where("title ILIKE ?", "%"+title+"%").Preload("Tags").Find(&bookmarks).Error
 
 	if err != nil {
 		return nil, err
@@ -84,11 +84,11 @@ func (r *BookmarkRepository) FindBookmarkByTitle(title string) ([]models.Bookmar
 
 }
 
-func (r *BookmarkRepository) SoftDeleteBookmarkByID(id uint) (*models.Bookmarks, error) {
+func (r *BookmarkRepository) SoftDeleteBookmarkByID(id uint, userID string) (*models.Bookmarks, error) {
 
 	var bookmark models.Bookmarks
 
-	err := r.db.Where("id = ?", id).Delete(&bookmark).Error
+	err := r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&bookmark).Error
 
 	if err != nil {
 		return nil, err
@@ -98,11 +98,11 @@ func (r *BookmarkRepository) SoftDeleteBookmarkByID(id uint) (*models.Bookmarks,
 
 }
 
-func (r *BookmarkRepository) UpdateBookmarkByID(id uint, update map[string]interface{}) (*models.Bookmarks, error) {
+func (r *BookmarkRepository) UpdateBookmarkByID(id uint, userID string, update map[string]interface{}) (*models.Bookmarks, error) {
 
 	var bookmark models.Bookmarks
 
-	err := r.db.Where("id = ?", id).Save(update).Error
+	err := r.db.Where("id = ? AND user_id = ?", id, userID).Save(update).Error
 
 	if err != nil {
 
