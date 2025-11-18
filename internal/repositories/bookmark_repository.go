@@ -97,3 +97,17 @@ func (r *BookmarkRepository) SoftDeleteBookmarkByID(id uint) (*models.Bookmarks,
 	return &bookmark, nil
 
 }
+
+func (r *BookmarkRepository) UpdateBookmarkByID(id uint, update map[string]interface{}) (*models.Bookmarks, error) {
+
+	var bookmark models.Bookmarks
+
+	err := r.db.Where("id = ?", id).Save(update).Error
+
+	if err != nil {
+
+		return nil, err
+	}
+
+	return &bookmark, nil
+}

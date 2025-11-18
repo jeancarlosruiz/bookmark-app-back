@@ -122,6 +122,53 @@ func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint) (*models.Bookma
 	return bookmark, nil
 }
 
+func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data validator.UpdateBookmark) (*models.Bookmarks, error) {
+	updates := make(map[string]interface{})
+
+	if data.Title != nil {
+		updates["title"] = *data.Title
+	}
+
+	if data.Url != nil {
+		updates["url"] = *data.Url
+	}
+
+	if data.Description != nil {
+		updates["description"] = *data.Description
+	}
+	if data.Favicon != nil {
+		updates["favicon"] = *data.Favicon
+	}
+	if data.Pinned != nil {
+		updates["pinned"] = *data.Pinned
+	}
+	if data.IsArchived != nil {
+		updates["is_archived"] = *data.IsArchived
+	}
+
+	if data.Tags != nil {
+		_, err := s.tagService.FindOrCreateTags(data.Tags, userID)
+
+		if err != nil {
+			return nil, err
+		}
+
+		// Hacer el replacement de tags
+
+	}
+
+	if len(updates) > 0 {
+		_, err := s.bookmarkRepo.UpdateBookmarkByID(id, updates)
+
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return s.bookmarkRepo.FindByIDWithTags(id)
+}
+
 var (
 	ErrBookmarkAlreadyExists = errors.New("bookmark with this title or URL already exists")
 	ErrBookmarksNotFound     = errors.New("Bookmarks not found")

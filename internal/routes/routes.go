@@ -5,7 +5,6 @@ import (
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/controllers"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/middleware"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/validator"
-	// "github.com/jeancarlosruiz/bookmark-app-back/internal/middleware"
 )
 
 func Setup(router *gin.Engine) {
@@ -29,6 +28,5 @@ func Setup(router *gin.Engine) {
 		protected.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
 		protected.PUT("/bookmark/update/:id", bookmarkCtrl.UpdateBookmark)
 		protected.DELETE("/bookmark/:id", bookmarkCtrl.DeleteBookmark)
-
 	}
 }

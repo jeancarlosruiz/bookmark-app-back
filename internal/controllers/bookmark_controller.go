@@ -288,4 +288,41 @@ func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
 		return
 	}
 
+	payload, exist := c.Get("payload")
+
+	if !exist {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Validation payload not found",
+		})
+
+		return
+	}
+
+	bookmarkData := payload.(validator.UpdateBookmark)
+
+	bookmarkUpdated, err := ctrl.service.UpdateBookmarkService(uint(bookmarkID), "user_id", bookmarkData)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este ID",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al buscar bookmark",
+			"error":   err.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark created successfully",
+		"data":    bookmarkUpdated,
+	})
+
 }
