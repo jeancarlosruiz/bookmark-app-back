@@ -1,426 +1,666 @@
 # 📊 Diagnóstico del Proyecto - Bookmark API Go
 
-**Fecha:** 13 de Noviembre 2025
+**Fecha:** 18 de Noviembre 2025
 **Proyecto:** Bookmark Management API
 **Stack:** Go 1.25.2 + Gin + GORM + PostgreSQL
 **Audiencia:** Desarrollador Full-Stack TypeScript aprendiendo Go
+**Análisis realizado por:** go-project-analyzer agent
 
 ---
 
 ## 🎯 Resumen Ejecutivo
 
-Este proyecto es una API de gestión de bookmarks bien estructurada que sigue patrones estándar de Go. Sin embargo, se detectaron **35 issues** que requieren atención:
+Este proyecto es una API de gestión de bookmarks con una **arquitectura sólida** (patrón de capas: controllers → services → repositories). Sin embargo, se detectaron **28 issues** que requieren atención:
 
-- **5 Críticos** 🔴 - Requieren atención inmediata
-- **10 Alta prioridad** 🟠 - Afectan funcionalidad y estabilidad
-- **14 Media prioridad** 🟡 - Mejoras de calidad de código
-- **6 Baja prioridad** 🟢 - Mejoras opcionales
+- **3 Críticos** 🔴 - Bloquean deployment a producción
+- **8 Alta prioridad** 🟠 - Afectan funcionalidad y estabilidad
+- **12 Media prioridad** 🟡 - Mejoras de calidad de código
+- **5 Baja prioridad** 🟢 - Optimizaciones opcionales
 
-**Estado General:** ⚠️ **BUENO con mejoras necesarias**
+**Estado General:** ⚠️ **REQUIERE CORRECCIONES CRÍTICAS**
 
-El código está bien organizado pero necesita refactorización en error handling, logging, seguridad y algunos patrones de GORM. Los problemas críticos de autenticación y validación de ownership deben abordarse antes de cualquier despliegue en producción.
+El código tiene una excelente base arquitectónica con separación clara de responsabilidades, pero **vulnerabilidades de seguridad críticas** y funcionalidades incompletas impiden el despliegue en producción. Los problemas de autenticación y validación deben resolverse inmediatamente.
 
 ---
 
 ## 🔴 PROBLEMAS CRÍTICOS
 
-### 1. UpdateBookmark Handler Incompleto
-**Ubicación:** `internal/handlers/bookmark_handler.go:138-151`
-**Severidad:** 🔴 CRÍTICO
+### 1. Autenticación Completamente Deshabilitada
+**Ubicación:** `internal/routes/routes.go:15`
+**Severidad:** 🔴 CRÍTICO - SEGURIDAD
 
 **Problema:**
 ```go
-func UpdateBookmark(c *gin.Context) {
-    id := c.Param("id")
-    var bookmark models.Bookmarks
-    if err := database.DB.First(&bookmark, id).Error; err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "Bookmark not found"})
-            return
-        }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
+func Setup(router *gin.Engine) {
+    protected := router.Group("/api")
+    // protected.Use(middleware.Protect)  // ❌ COMENTADO - AUTENTICACIÓN DESHABILITADA
+    {
+        protected.GET("/users", controllers.GetUsers)
+        protected.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
+        protected.DELETE("/bookmark/:id", bookmarkCtrl.DeleteBookmark)
+        // ... todos los endpoints sin protección
     }
-
-    // ❌ LA FUNCIÓN TERMINA AQUÍ - NO HAY LÓGICA DE ACTUALIZACIÓN
 }
 ```
 
 **Por qué es crítico:**
-La función encuentra el bookmark pero nunca lo actualiza. Las peticiones PUT retornan 200 OK pero los datos nunca cambian en la base de datos.
+- **Acceso público total**: Cualquier persona puede acceder a todos los endpoints sin autenticación
+- **Manipulación de datos**: Crear, modificar y eliminar bookmarks de cualquier usuario
+- **Exposición de información**: Ver bookmarks privados de todos los usuarios
+- **Sin trazabilidad**: No se puede identificar quién realizó qué acción
 
 **Impacto:**
-- Los usuarios no pueden actualizar sus bookmarks
-- Endpoint funciona pero no hace nada (comportamiento silencioso)
-- Mala experiencia de usuario y pérdida de confianza en la API
+- ⚠️ **Violación masiva de privacidad**
+- ⚠️ **Pérdida de integridad de datos**
+- ⚠️ **Imposible deployment en producción**
+- ⚠️ **Responsabilidad legal** por exposición de datos
 
 **Solución:**
 ```go
-func UpdateBookmark(c *gin.Context) {
-    id := c.Param("id")
+func Setup(router *gin.Engine) {
+    protected := router.Group("/api")
+    protected.Use(middleware.Protect)  // ✅ ACTIVAR AUTENTICACIÓN
+    {
+        protected.GET("/users", controllers.GetUsers)
+        protected.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
+        // ... resto de endpoints protegidos
+    }
+}
+```
 
+---
+
+### 2. JWT Token Validation Incompleta
+**Ubicación:** `internal/middleware/protect.go:18-25`
+**Severidad:** 🔴 CRÍTICO - SEGURIDAD
+
+**Problema:**
+```go
+func Protect(c *gin.Context) {
+    authHeader := c.GetHeader("Authorization")
+
+    if authHeader == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing authorization header"})
+        c.Abort()
+        return
+    }
+
+    // ❌ SOLO VERIFICA PRESENCIA, NO VALIDA EL TOKEN
+    // ❌ NO EXTRAE USER_ID DEL TOKEN
+    // ❌ NO VERIFICA FIRMA
+    // ❌ NO VERIFICA EXPIRACIÓN
+
+    c.Next()
+}
+```
+
+**Por qué es crítico:**
+- **Cualquier token es válido**: Solo verifica que exista un header, no valida el contenido
+- **Sin verificación de firma**: Tokens pueden ser falsificados
+- **Sin verificación de expiración**: Tokens robados funcionan indefinidamente
+- **Sin extracción de claims**: No se puede identificar al usuario autenticado
+
+**Impacto:**
+- ⚠️ **Bypass total de autenticación** con cualquier string en Authorization header
+- ⚠️ **Tokens falsificados** son aceptados
+- ⚠️ **Sin control de acceso** real
+
+**Solución:**
+```go
+import (
+    "github.com/golang-jwt/jwt/v5"
+    "strings"
+)
+
+func Protect(c *gin.Context) {
+    authHeader := c.GetHeader("Authorization")
+
+    if authHeader == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing authorization header"})
+        c.Abort()
+        return
+    }
+
+    // Extraer token del header "Bearer <token>"
+    tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+    if tokenString == authHeader {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
+        c.Abort()
+        return
+    }
+
+    // Parsear y validar token
+    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+        // Verificar método de firma
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+        }
+        return []byte(os.Getenv("JWT_SECRET")), nil
+    })
+
+    if err != nil || !token.Valid {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+        c.Abort()
+        return
+    }
+
+    // Extraer claims
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        c.Abort()
+        return
+    }
+
+    // Guardar user_id en contexto para uso en handlers
+    userID, ok := claims["user_id"].(string)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user_id in token"})
+        c.Abort()
+        return
+    }
+
+    c.Set("user_id", userID)
+    c.Next()
+}
+```
+
+---
+
+### 3. Sin Validación de URLs - Inyección Maliciosa
+**Ubicación:** `internal/validator/bookmark_validator.go:3-8`
+**Severidad:** 🔴 CRÍTICO - SEGURIDAD
+
+**Problema:**
+```go
+type CreateBookmark struct {
+    Title  string   `validate:"required"`
+    Url    string   `validate:"required"`  // ❌ NO VALIDA FORMATO DE URL
+    UserID string   `validate:"required"`
+    Tags   []string `validate:"omitempty,dive,min=1"`
+}
+```
+
+**Por qué es crítico:**
+- **Acepta cualquier string** como URL (javascript:, data:, file://, etc.)
+- **XSS potencial**: URLs como `javascript:alert('XSS')` pueden ejecutar código
+- **Phishing**: URLs maliciosas pueden ser guardadas y compartidas
+- **SSRF potencial**: URLs internas pueden ser accedidas si hay scraping
+
+**Ejemplos de input malicioso aceptado:**
+```json
+{
+  "url": "javascript:alert(document.cookie)",
+  "url": "data:text/html,<script>alert('XSS')</script>",
+  "url": "file:///etc/passwd",
+  "url": "http://malware-site.com/ransomware.exe"
+}
+```
+
+**Impacto:**
+- ⚠️ **XSS attacks** si URLs se renderizan en frontend
+- ⚠️ **Phishing** y distribución de malware
+- ⚠️ **SSRF** si se implementa metadata scraping
+- ⚠️ **Reputación** comprometida del servicio
+
+**Solución:**
+```go
+type CreateBookmark struct {
+    Title  string   `validate:"required,min=1,max=200"`
+    Url    string   `validate:"required,url,http_url"`  // ✅ Validación de URL
+    UserID string   `validate:"required"`
+    Tags   []string `validate:"omitempty,dive,min=1,max=50"`
+}
+
+// Validador custom para URLs HTTP/HTTPS únicamente
+func init() {
+    validate := validator.New()
+    validate.RegisterValidation("http_url", func(fl validator.FieldLevel) bool {
+        url := fl.Field().String()
+        return strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")
+    })
+}
+```
+
+**O validación más robusta:**
+```go
+import "net/url"
+
+func validateBookmarkURL(bookmarkURL string) error {
+    parsedURL, err := url.Parse(bookmarkURL)
+    if err != nil {
+        return fmt.Errorf("invalid URL format: %w", err)
+    }
+
+    // Solo permitir HTTP y HTTPS
+    if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+        return fmt.Errorf("only http and https URLs are allowed")
+    }
+
+    // Verificar que tenga host
+    if parsedURL.Host == "" {
+        return fmt.Errorf("URL must have a host")
+    }
+
+    // Opcional: Blacklist de dominios conocidos maliciosos
+    blacklist := []string{"malware.com", "phishing-site.net"}
+    for _, blocked := range blacklist {
+        if strings.Contains(parsedURL.Host, blocked) {
+            return fmt.Errorf("URL domain is blacklisted")
+        }
+    }
+
+    return nil
+}
+```
+
+---
+
+## 🟠 PROBLEMAS DE ALTA PRIORIDAD
+
+### 4. Sin Configuración de Connection Pool
+**Ubicación:** `internal/database/database.go:13-32`
+**Severidad:** 🟠 ALTA - PERFORMANCE/ESTABILIDAD
+
+**Problema:**
+```go
+func Connect() error {
+    _ = godotenv.Load()
+    dsn := os.Getenv("DATABASE_URL")
+    db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+        PrepareStmt: true,
+    })
+    // ❌ NO CONFIGURA CONNECTION POOL
+    // ❌ NO HACE PING DE VERIFICACIÓN
+    // ❌ NO CONFIGURA LÍMITES DE CONEXIONES
+
+    if err := db.Exec("SET search_path TO public, neon_auth").Error; err != nil {
+        return err
+    }
+
+    DB = db
+    return nil
+}
+```
+
+**Por qué es crítico:**
+- **Agotamiento de conexiones** bajo carga moderada
+- **Memory leaks** por conexiones no cerradas
+- **Performance degradada** sin conexiones idle reutilizables
+- **Timeouts** aleatorios en producción
+
+**Impacto:**
+- Funciona en desarrollo (1-2 usuarios)
+- **Colapsa en producción** (50+ usuarios concurrentes)
+- Difícil de diagnosticar (intermitente)
+
+**Solución:**
+```go
+func Connect() error {
+    _ = godotenv.Load()
+    dsn := os.Getenv("DATABASE_URL")
+
+    db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+        PrepareStmt: true,
+        Logger:      logger.Default.LogMode(logger.Info),
+    })
+    if err != nil {
+        return fmt.Errorf("failed to connect to database: %w", err)
+    }
+
+    // Obtener instancia SQL
+    sqlDB, err := db.DB()
+    if err != nil {
+        return fmt.Errorf("failed to get database instance: %w", err)
+    }
+
+    // ✅ Configurar connection pool
+    sqlDB.SetMaxOpenConns(25)                   // Máximo conexiones abiertas
+    sqlDB.SetMaxIdleConns(5)                    // Conexiones idle en pool
+    sqlDB.SetConnMaxLifetime(5 * time.Minute)   // Vida máxima de conexión
+    sqlDB.SetConnMaxIdleTime(10 * time.Minute)  // Tiempo máximo idle
+
+    // ✅ Verificar conectividad
+    if err := sqlDB.Ping(); err != nil {
+        return fmt.Errorf("failed to ping database: %w", err)
+    }
+
+    // Configurar search path
+    if err := db.Exec("SET search_path TO public, neon_auth").Error; err != nil {
+        return fmt.Errorf("failed to set search path: %w", err)
+    }
+
+    log.Println("✅ Database connected with pool configuration")
+    DB = db
+    return nil
+}
+```
+
+---
+
+### 5. UpdateBookmark Incompleto - Funcionalidad Rota
+**Ubicación:** `internal/controllers/bookmark_controller.go:257-290`
+**Severidad:** 🟠 ALTA - FUNCIONALIDAD
+
+**Problema:**
+```go
+func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
+    bookmarkIDStr := c.Param("id")
+    bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+
+    if err != nil || bookmarkID <= 0 {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "message": "Formato de ID invalido",
+            "error":   err.Error(),
+        })
+        return
+    }
+
+    _, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID))
+
+    if err != nil {
+        // Error handling...
+        return
+    }
+
+    // ❌ LA FUNCIÓN TERMINA AQUÍ - NO ACTUALIZA NADA
+}
+```
+
+**Por qué es problemático:**
+- **Endpoint no funciona**: Busca el bookmark pero nunca actualiza
+- **Silenciosamente falla**: No hay error, simplemente no hace nada
+- **Mala UX**: Usuario cree que actualizó pero datos no cambian
+
+**Solución completa:**
+```go
+// 1. Crear validator para actualización
+// internal/validator/bookmark_validator.go
+type UpdateBookmark struct {
+    Title       *string  `json:"title" validate:"omitempty,min=1,max=200"`
+    Url         *string  `json:"url" validate:"omitempty,url,http_url"`
+    Description *string  `json:"description" validate:"omitempty,max=1000"`
+    Favicon     *string  `json:"favicon" validate:"omitempty,url"`
+    Pinned      *bool    `json:"pinned"`
+    IsArchived  *bool    `json:"is_archived"`
+    Tags        []string `json:"tags" validate:"omitempty,dive,min=1,max=50"`
+}
+
+// 2. Implementar servicio de actualización
+// internal/services/bookmark_service.go
+func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data validator.UpdateBookmark) (*models.Bookmarks, error) {
+    // Buscar bookmark y verificar ownership
+    bookmark, err := s.bookmarkRepo.FindByIDWithTags(id)
+    if err != nil {
+        return nil, err
+    }
+
+    if bookmark.UserID != userID {
+        return nil, errors.New("forbidden: you don't own this bookmark")
+    }
+
+    // Actualizar campos que vienen en el request
+    updates := make(map[string]interface{})
+    if data.Title != nil {
+        updates["title"] = *data.Title
+    }
+    if data.Url != nil {
+        updates["url"] = *data.Url
+    }
+    if data.Description != nil {
+        updates["description"] = *data.Description
+    }
+    if data.Favicon != nil {
+        updates["favicon"] = *data.Favicon
+    }
+    if data.Pinned != nil {
+        updates["pinned"] = *data.Pinned
+    }
+    if data.IsArchived != nil {
+        updates["is_archived"] = *data.IsArchived
+    }
+
+    // Actualizar tags si se enviaron
+    if data.Tags != nil {
+        tags, err := s.tagService.FindOrCreateTags(data.Tags, userID)
+        if err != nil {
+            return nil, err
+        }
+
+        // Reemplazar tags existentes
+        if err := s.bookmarkRepo.ReplaceTags(bookmark, tags); err != nil {
+            return nil, err
+        }
+    }
+
+    // Aplicar updates
+    if len(updates) > 0 {
+        if err := s.bookmarkRepo.Update(id, updates); err != nil {
+            return nil, err
+        }
+    }
+
+    // Retornar bookmark actualizado con relaciones
+    return s.bookmarkRepo.FindByIDWithTags(id)
+}
+
+// 3. Completar controller
+func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
+    bookmarkIDStr := c.Param("id")
+    bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+
+    if err != nil || bookmarkID <= 0 {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "message": "Invalid bookmark ID format",
+        })
+        return
+    }
+
+    // Obtener user_id del middleware de autenticación
+    userID := c.GetString("user_id")
+    if userID == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{
+            "message": "Unauthorized",
+        })
+        return
+    }
+
+    // Obtener payload validado
     payload, exists := c.Get("payload")
     if !exists {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+        c.JSON(http.StatusBadRequest, gin.H{
+            "message": "Invalid request body",
+        })
         return
     }
 
     updateData := payload.(validator.UpdateBookmark)
 
-    var bookmark models.Bookmarks
-    if err := database.DB.First(&bookmark, id).Error; err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "Bookmark not found"})
+    // Actualizar bookmark
+    bookmark, err := ctrl.service.UpdateBookmarkService(uint(bookmarkID), userID, updateData)
+
+    if err != nil {
+        if err.Error() == "forbidden: you don't own this bookmark" {
+            c.JSON(http.StatusForbidden, gin.H{
+                "message": "You don't have permission to update this bookmark",
+            })
             return
         }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-        return
-    }
 
-    // Actualizar campos
-    updates := map[string]interface{}{}
-    if updateData.Title != nil {
-        updates["title"] = *updateData.Title
-    }
-    if updateData.Url != nil {
-        updates["url"] = *updateData.Url
-    }
-    if updateData.Description != nil {
-        updates["description"] = *updateData.Description
-    }
-    if updateData.Favicon != nil {
-        updates["favicon"] = *updateData.Favicon
-    }
-    if updateData.Pinned != nil {
-        updates["pinned"] = *updateData.Pinned
-    }
-    if updateData.IsArchived != nil {
-        updates["is_archived"] = *updateData.IsArchived
-    }
+        if err == gorm.ErrRecordNotFound {
+            c.JSON(http.StatusNotFound, gin.H{
+                "message": "Bookmark not found",
+            })
+            return
+        }
 
-    if err := database.DB.Model(&bookmark).Updates(updates).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bookmark"})
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "message": "Failed to update bookmark",
+            "error":   err.Error(),
+        })
         return
     }
 
     c.JSON(http.StatusOK, gin.H{
         "message": "Bookmark updated successfully",
-        "data": bookmark,
+        "data":    bookmark,
     })
 }
+
+// 4. Actualizar ruta para incluir middleware de validación
+// internal/routes/routes.go
+protected.PUT("/bookmark/update/:id",
+    middleware.Validator[validator.UpdateBookmark](),
+    bookmarkCtrl.UpdateBookmark)
 ```
 
 ---
 
-### 2. Autenticación Deshabilitada - Acceso Público a Todos los Datos
-**Ubicación:** `internal/routes/routes.go:10-22`
-**Severidad:** 🔴 CRÍTICO - SEGURIDAD
-
-**Problema:**
-```go
-func SetupRoutes(r *gin.Engine) {
-    api := r.Group("/api")
-    // api.Use(middleware.Protect()) // ❌ MIDDLEWARE DE AUTENTICACIÓN COMENTADO
-    {
-        // Todos estos endpoints están públicamente accesibles
-        api.GET("/users", handlers.GetUsers)
-        api.GET("/bookmark", handlers.GetAllBookmarks)
-        api.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), handlers.CreateBookmark)
-        // ...
-    }
-}
-```
-
-**Por qué es crítico:**
-Sin autenticación activa, CUALQUIER persona puede:
-- Ver todos los bookmarks de todos los usuarios
-- Crear, modificar y eliminar bookmarks
-- Acceder a información sensible de usuarios
-- No hay control de acceso ni ownership
-
-**Impacto:**
-- ⚠️ Exposición de datos privados
-- ⚠️ Vulnerabilidad de seguridad masiva
-- ⚠️ Violación de privacidad de usuarios
-- ⚠️ No apto para producción
-
-**Solución Inmediata:**
-```go
-func SetupRoutes(r *gin.Engine) {
-    api := r.Group("/api")
-    api.Use(middleware.Protect()) // ✅ ACTIVAR AUTENTICACIÓN
-    {
-        api.GET("/users", handlers.GetUsers)
-        api.GET("/bookmark", handlers.GetAllBookmarks)
-        // ...
-    }
-}
-```
-
----
-
-### 3. UserID Injection Vulnerability
-**Ubicación:** `internal/handlers/bookmark_handler.go:56-60`
-**Severidad:** 🔴 CRÍTICO - SEGURIDAD
-
-**Problema:**
-```go
-func CreateBookmark(c *gin.Context) {
-    payload, _ := c.Get("payload")
-    bookmarkData := payload.(validator.CreateBookmark)
-
-    bookmark := models.Bookmarks{
-        UserID:      bookmarkData.UserID,  // ❌ CONFIA EN DATOS DEL CLIENTE
-        Title:       bookmarkData.Title,
-        Url:         bookmarkData.Url,
-        // ...
-    }
-}
-```
-
-**Por qué es crítico:**
-Un atacante puede especificar cualquier `UserID` en el request body y crear bookmarks para otros usuarios:
-
-```bash
-# Atacante crea bookmark para víctima
-curl -X POST /api/bookmark \
-  -d '{"user_id": "victim-user-id", "title": "Malicious", "url": "http://evil.com"}'
-```
-
-**Impacto:**
-- ⚠️ Manipulación de datos de otros usuarios
-- ⚠️ Inyección de contenido malicioso
-- ⚠️ Violación de integridad de datos
-- ⚠️ Escalación de privilegios
-
-**Solución:**
-```go
-func CreateBookmark(c *gin.Context) {
-    // ✅ Obtener UserID del token JWT autenticado
-    userID := c.GetString("user_id")  // Del middleware de auth
-    if userID == "" {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-        return
-    }
-
-    payload, exists := c.Get("payload")
-    if !exists {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload"})
-        return
-    }
-
-    bookmarkData := payload.(validator.CreateBookmark)
-
-    bookmark := models.Bookmarks{
-        UserID:      userID,  // ✅ Usar ID del usuario autenticado
-        Title:       bookmarkData.Title,
-        Url:         bookmarkData.Url,
-        // ...
-    }
-
-    // ... resto de la lógica
-}
-```
-
----
-
-### 4. Sin Validación de Errores en Migraciones
-**Ubicación:** `cmd/api/main.go:23`
-**Severidad:** 🔴 CRÍTICO
-
-**Problema:**
-```go
-func main() {
-    database.DB.AutoMigrate(&models.Bookmarks{}, &models.Tag{}, &models.BookmarkTag{})
-    // ❌ No verifica si las migraciones fallaron
-
-    r := gin.Default()
-    // ...
-}
-```
-
-**Por qué es crítico:**
-Si las migraciones fallan (por problemas de schema, permisos, conexión), el servidor arranca de todas formas pero la base de datos está en estado inconsistente. Esto causa:
-- Panics cuando se intenta insertar datos
-- Errores crípticos en runtime
-- Dificultad para debuggear
-
-**Solución:**
-```go
-func main() {
-    if err := database.DB.AutoMigrate(
-        &models.Bookmarks{},
-        &models.Tag{},
-        &models.BookmarkTag{},
-    ); err != nil {
-        log.Fatal("Failed to migrate database:", err)
-    }
-
-    log.Println("✅ Database migrations completed successfully")
-
-    r := gin.Default()
-    // ...
-}
-```
-
----
-
-### 5. Sin Configuración de Connection Pool
-**Ubicación:** `internal/database/database.go:15-30`
-**Severidad:** 🔴 CRÍTICO - PERFORMANCE
-
-**Problema:**
-```go
-func Connect() {
-    db, err := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{})
-    // ❌ No configura pool de conexiones
-    DB = db
-}
-```
-
-**Por qué es crítico:**
-Sin configuración del pool:
-- Puede agotar conexiones bajo carga
-- Performance degradada
-- Conexiones zombies
-- Posibles deadlocks
-
-**Impacto:**
-- En desarrollo: Funciona bien (baja carga)
-- En producción: Colapso bajo tráfico
-
-**Solución:**
-```go
-func Connect() {
-    db, err := gorm.Open(postgres.Open(config.DatabaseURL), &gorm.Config{
-        Logger: logger.Default.LogMode(logger.Info),
-    })
-    if err != nil {
-        log.Fatal("Failed to connect to database:", err)
-    }
-
-    sqlDB, err := db.DB()
-    if err != nil {
-        log.Fatal("Failed to get database instance:", err)
-    }
-
-    // ✅ Configurar pool de conexiones
-    sqlDB.SetMaxOpenConns(25)                  // Máximo de conexiones abiertas
-    sqlDB.SetMaxIdleConns(5)                   // Conexiones idle en el pool
-    sqlDB.SetConnMaxLifetime(5 * time.Minute)  // Vida máxima de una conexión
-    sqlDB.SetConnMaxIdleTime(10 * time.Minute) // Tiempo máximo idle
-
-    // Verificar conectividad
-    if err := sqlDB.Ping(); err != nil {
-        log.Fatal("Failed to ping database:", err)
-    }
-
-    log.Println("✅ Database connected with pool configuration")
-    DB = db
-}
-```
-
----
-
-## 🟠 PROBLEMAS DE ALTA PRIORIDAD
-
-### 6. Soft Delete Logic Inconsistency
-**Ubicación:** `internal/handlers/bookmark_handler.go:98`
-
-**Problema:**
-```go
-func DeleteBookmark(c *gin.Context) {
-    var bookmark models.Bookmarks
-    database.DB.First(&bookmark, id)
-    bookmark.IsActive = false
-    database.DB.Save(&bookmark)
-}
-```
-
-Problemas:
-1. No verifica si `First()` encontró el registro
-2. No maneja errores de `Save()`
-3. Usa `PUT` en lugar de `DELETE` en la ruta
-
-**Solución:**
-```go
-func DeleteBookmark(c *gin.Context) {
-    id := c.Param("id")
-
-    // Verificar existencia
-    var bookmark models.Bookmarks
-    if err := database.DB.First(&bookmark, id).Error; err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            c.JSON(http.StatusNotFound, gin.H{"error": "Bookmark not found"})
-            return
-        }
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-
-    // Soft delete
-    if err := database.DB.Model(&bookmark).Update("is_active", false).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-
-    c.JSON(http.StatusOK, gin.H{"message": "Bookmark deleted successfully"})
-}
-```
-
-**Y cambiar la ruta:**
-```go
-// En internal/routes/routes.go
-api.DELETE("/bookmark/:id", handlers.DeleteBookmark) // ✅ Usar DELETE
-```
-
----
-
-## 🟠 PROBLEMAS DE ALTA PRIORIDAD
-
-### 7. N+1 Query Problem - Performance Crítico
-**Ubicación:** Múltiples handlers
+### 6. Problemas N+1 de Performance
+**Ubicación:** `internal/repositories/bookmark_repository.go`
 **Severidad:** 🟠 ALTA - PERFORMANCE
 
 **Problema:**
-```go
-// GetAllBookmarks - internal/handlers/bookmark_handler.go:32
-func GetAllBookmarks(c *gin.Context) {
-    var bookmarks []models.Bookmarks
-    database.DB.Find(&bookmarks)  // ❌ No preload de relaciones
-    c.JSON(http.StatusOK, bookmarks)
-}
+Varios métodos no usan `Preload`, causando queries adicionales:
 
-// GetBookmarksByUserID - internal/handlers/bookmark_handler.go:84
-func GetBookmarksByUserID(c *gin.Context) {
+```go
+// ❌ GetBookmarkByUserID no preload de Tags
+func (r *BookmarkRepository) FindByUserIDWithTags(userID string) ([]models.Bookmarks, error) {
     var bookmarks []models.Bookmarks
-    database.DB.Where("user_id = ?", userID).Find(&bookmarks)  // ❌ Sin Preload
-    c.JSON(http.StatusOK, bookmarks)
+    err := r.db.Preload("Tags").Where("user_id = ?", userID).Find(&bookmarks).Error
+    // Solo preload Tags, pero podría haber más relaciones
+    return bookmarks, err
 }
 ```
 
-**Por qué es problemático:**
-Genera el problema N+1:
-- 1 query para obtener bookmarks
-- N queries adicionales si accedes a `bookmark.User` o `bookmark.Tags`
-- Con 100 bookmarks = 101 queries en lugar de 2-3
+**Impacto de N+1:**
+```
+Usuario tiene 100 bookmarks con tags:
+- Sin Preload: 1 query bookmarks + 100 queries tags = 101 queries
+- Con Preload: 1 query bookmarks + 1 query tags = 2 queries
+
+Diferencia: 50x más rápido con Preload
+```
+
+**Solución:**
+Asegurar Preload consistente en todos los métodos que retornan bookmarks con relaciones.
+
+---
+
+### 7. Detección de Duplicados Rota
+**Ubicación:** `internal/repositories/bookmark_repository.go:19-32`
+**Severidad:** 🟠 ALTA - LÓGICA DE NEGOCIO
+
+**Problema:**
+```go
+func (r *BookmarkRepository) FindByTitleOrURL(title string, url string, userID string) (*models.Bookmarks, error) {
+    var bookmark models.Bookmarks
+    err := r.db.Where(&models.Bookmarks{
+        Title:  title,
+        Url:    url,
+        UserID: userID,
+    }).First(&bookmark).Error
+    // ❌ Usa AND en vez de OR - solo detecta si AMBOS coinciden
+    // ❌ Un usuario puede tener URLs duplicadas con títulos diferentes
+}
+```
 
 **Solución:**
 ```go
-func GetAllBookmarks(c *gin.Context) {
-    var bookmarks []models.Bookmarks
+func (r *BookmarkRepository) FindByTitleOrURL(title string, url string, userID string) (*models.Bookmarks, error) {
+    var bookmark models.Bookmarks
+    err := r.db.Where("user_id = ? AND (title = ? OR url = ?)", userID, title, url).
+        First(&bookmark).Error
 
-    // ✅ Preload para evitar N+1
-    if err := database.DB.
-        Preload("User").
-        Preload("Tags").
-        Where("is_active = ?", true).
-        Find(&bookmarks).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+    if err != nil {
+        return nil, err
+    }
+
+    return &bookmark, nil
+}
+```
+
+---
+
+### 8. Sin Validación de Ownership
+**Ubicación:** `internal/controllers/bookmark_controller.go:207-254`
+**Severidad:** 🟠 ALTA - SEGURIDAD
+
+**Problema en DeleteBookmark:**
+```go
+func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
+    bookmarkIDStr := c.Param("id")
+    bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+    // ❌ NO VERIFICA QUE EL BOOKMARK PERTENEZCA AL USUARIO AUTENTICADO
+
+    _, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID))
+    // ❌ Cualquier usuario autenticado puede eliminar bookmarks de otros
+
+    _, err = ctrl.service.SoftDeleteBookmarkByIDService(uint(bookmarkID))
+}
+```
+
+**Impacto:**
+Usuario A puede eliminar bookmarks de Usuario B si conoce el ID.
+
+**Solución:**
+```go
+func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
+    bookmarkIDStr := c.Param("id")
+    bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+
+    if err != nil || bookmarkID <= 0 {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "message": "Invalid bookmark ID",
+        })
         return
     }
 
-    c.JSON(http.StatusOK, bookmarks)
+    // ✅ Obtener user_id del middleware de autenticación
+    userID := c.GetString("user_id")
+    if userID == "" {
+        c.JSON(http.StatusUnauthorized, gin.H{
+            "message": "Unauthorized",
+        })
+        return
+    }
+
+    bookmark, err := ctrl.service.FindByIDWithTagsService(uint(bookmarkID))
+
+    if err != nil {
+        if err == gorm.ErrRecordNotFound {
+            c.JSON(http.StatusNotFound, gin.H{
+                "message": "Bookmark not found",
+            })
+            return
+        }
+
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "message": "Error finding bookmark",
+        })
+        return
+    }
+
+    // ✅ Verificar ownership
+    if bookmark.UserID != userID {
+        c.JSON(http.StatusForbidden, gin.H{
+            "message": "You don't have permission to delete this bookmark",
+        })
+        return
+    }
+
+    _, err = ctrl.service.SoftDeleteBookmarkByIDService(uint(bookmarkID))
+
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "message": "Failed to delete bookmark",
+        })
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "message": "Bookmark deleted successfully",
+    })
 }
 ```
 
@@ -1591,94 +1831,124 @@ if err := c.ShouldBindJSON(&data); err != nil {
 
 ## 🎯 PLAN DE ACCIÓN RECOMENDADO
 
-### ⚠️ BLOQUEADORES - Resolver INMEDIATAMENTE (Día 1-2)
+### ⚠️ BLOQUEADORES CRÍTICOS - Resolver INMEDIATAMENTE (Día 1-3)
 
-**Estos problemas impiden un despliegue seguro en producción:**
+**🚫 DEPLOYMENT BLOQUEADO hasta resolver estos 3 issues críticos de seguridad:**
 
-1. **🔴 Completar UpdateBookmark** (`internal/handlers/bookmark_handler.go:138`)
-   - Implementar la lógica de actualización completa
-   - Agregar validación con middleware
-   - Verificar ownership del recurso
+1. **🔴 Activar y Completar Autenticación** (`internal/routes/routes.go:15` + `internal/middleware/protect.go`)
+   - Descomentar `protected.Use(middleware.Protect)`
+   - Implementar validación JWT completa (firma, expiración, claims)
+   - Extraer y guardar `user_id` del token en contexto
+   - Testear con tokens válidos e inválidos
+   - **Impacto:** Sin esto, cualquier persona puede acceder a todos los datos
 
-2. **🔴 Activar Autenticación** (`internal/routes/routes.go:12`)
-   - Descomentar `api.Use(middleware.Protect())`
-   - Verificar que el middleware JWT funcione correctamente
-   - Testear todos los endpoints con autenticación
+2. **🔴 Implementar Validación de URLs** (`internal/validator/bookmark_validator.go`)
+   - Agregar validación `url,http_url` a campo Url
+   - Crear validador custom que solo permita http:// y https://
+   - Rechazar javascript:, data:, file://, etc.
+   - **Impacto:** Sin esto, se pueden inyectar URLs maliciosas (XSS, phishing)
 
-3. **🔴 Corregir UserID Injection** (`internal/handlers/bookmark_handler.go:56`)
-   - Obtener UserID del token JWT en vez del request body
-   - Aplicar mismo patrón en UpdateBookmark y DeleteBookmark
-   - Validar ownership en todos los endpoints de modificación
+3. **🔴 Obtener UserID del Token (no del request)** (Todos los controllers)
+   - En CreateBookmark: Obtener userID de `c.GetString("user_id")`
+   - Eliminar UserID del validator CreateBookmark
+   - Aplicar en UpdateBookmark y DeleteBookmark
+   - **Impacto:** Sin esto, usuarios pueden manipular datos de otros
 
-4. **🔴 Agregar Error Checking en Migraciones** (`cmd/api/main.go:23`)
-   - Verificar resultado de AutoMigrate
-   - Agregar log.Fatal si fallan las migraciones
-   - Confirmar que el schema está correcto antes de arrancar
-
-5. **🔴 Configurar Connection Pool** (`internal/database/database.go`)
-   - SetMaxOpenConns(25)
-   - SetMaxIdleConns(5)
-   - SetConnMaxLifetime y SetConnMaxIdleTime
-   - Agregar Ping() para verificar conectividad
-
-**Estimado: 1-2 días**
+**Tiempo estimado:** 2-3 días
+**Prioridad:** **MÁXIMA** - Bloquean deployment
 
 ---
 
 ### 🟠 ALTA PRIORIDAD - Antes de Producción (Semana 1)
 
-**Estabilidad y calidad:**
+**Estabilidad, funcionalidad y performance:**
 
-6. **Corregir Soft Delete Logic** - Cambiar ruta PUT a DELETE, verificar errores
-7. **Resolver N+1 Queries** - Agregar Preload en GetAllBookmarks y GetBookmarksByUserID
-8. **Estandarizar Manejo de Errores** - Crear utils/response.go con helpers
-9. **Agregar Validación de Ownership** - En UpdateBookmark y DeleteBookmark
-10. **Reemplazar Debug Statements** - Implementar structured logging con slog
-11. **Verificar Errores GORM** - Agregar `.Error` en todas las operaciones
-12. **Agregar Return Statements** - Después de cada c.JSON en caso de error
+4. **Configurar Connection Pool** (`internal/database/database.go`)
+   - SetMaxOpenConns(25), SetMaxIdleConns(5)
+   - SetConnMaxLifetime y SetConnMaxIdleTime
+   - Agregar Ping() para verificar conectividad
+   - **Riesgo:** Colapso bajo carga en producción
 
-**Estimado: 3-5 días**
+5. **Completar UpdateBookmark** (`internal/controllers/bookmark_controller.go:257-290`)
+   - Crear validator UpdateBookmark con campos opcionales
+   - Implementar UpdateBookmarkService con verificación de ownership
+   - Crear método repository.Update() para aplicar cambios
+   - Soportar actualización de tags
+   - **Riesgo:** Funcionalidad crítica rota
+
+6. **Resolver Problemas N+1** (`internal/repositories/bookmark_repository.go`)
+   - Asegurar Preload("Tags") en todos los métodos que retornan bookmarks
+   - Considerar preload condicional basado en parámetros
+   - **Riesgo:** Performance 50x más lenta con muchos bookmarks
+
+7. **Corregir Detección de Duplicados** (`internal/repositories/bookmark_repository.go:19-32`)
+   - Cambiar WHERE con struct a WHERE con OR: `user_id = ? AND (title = ? OR url = ?)`
+   - **Riesgo:** Se permiten URLs duplicadas
+
+8. **Agregar Validación de Ownership** (`internal/controllers/bookmark_controller.go`)
+   - En DeleteBookmark: Verificar bookmark.UserID == userID del token
+   - En UpdateBookmark: Verificar ownership antes de actualizar
+   - En GetBookmarkByID: Considerar si debe verificar ownership
+   - **Riesgo:** Usuarios pueden eliminar/modificar bookmarks de otros
+
+**Tiempo estimado:** 4-6 días
+**Prioridad:** ALTA - Necesario para producción estable
 
 ---
 
 ### 🟡 MEJORAS DE CALIDAD (Semana 2-3)
 
-**Production-ready features:**
+**Production-ready features - 12 issues de prioridad media:**
 
-13. **Global Error Handler** - Middleware para capturar panics
-14. **Configurar CORS** - Para permitir requests del frontend
-15. **Graceful Shutdown** - Manejar SIGTERM correctamente
-16. **Ocultar Errores Sensibles** - No exponer detalles internos al cliente
-17. **Request ID Tracking** - Para debugging y tracing
-18. **Mejorar Validation Tags** - Agregar constraints en validators
-19. **Agregar Database Indexes** - Para queries frecuentes (user_id, is_active, pinned)
-20. **Context Timeouts** - En todas las operaciones de base de datos
-21. **Dependency Injection** - Refactorizar handlers para recibir DB
-22. **Rate Limiting** - Proteger contra abuse
+9. **Manejo de Errores Estandarizado**
+   - Crear helper utils/response.go
+   - Unificar formato de respuestas JSON
+   - No exponer errores internos al cliente
 
-**Estimado: 1-2 semanas**
+10. **Structured Logging**
+    - Implementar slog (Go 1.21+)
+    - Eliminar fmt.Println de código
+    - Agregar request ID tracking
+
+11. **CORS Configuration**
+    - Agregar middleware CORS
+    - Configurar origins permitidos
+
+12. **Graceful Shutdown**
+    - Manejar SIGTERM/SIGINT
+    - Cerrar conexiones limpiamente
+
+13. **Validation Tags Mejoradas**
+    - Agregar min/max lengths
+    - Validación de formato de tags
+
+14. **Database Indexes**
+    - Índice compuesto (user_id, created_at)
+    - Índices para búsquedas frecuentes
+
+15. **Migration Error Checking**
+    - Verificar AutoMigrate() retorna sin error
+    - Fail fast si schema no se puede crear
+
+16-20. **Otros issues de media prioridad** (ver sección completa arriba)
+
+**Tiempo estimado:** 1-2 semanas
+**Prioridad:** MEDIA - Calidad y maintainability
 
 ---
 
-### 🟢 OPTIMIZACIONES Y FEATURES OPCIONALES (Semana 4+)
+### 🟢 OPTIMIZACIONES (Semana 4+)
 
-**Nice to have:**
+**Nice-to-have features - 5 issues de baja prioridad:**
 
-23. **Tests Unitarios** - Coverage mínimo 70%
-24. **Tests de Integración** - Para endpoints críticos
-25. **Health Check Endpoint** - `/health` para monitoring
-26. **Metrics y Monitoring** - Prometheus/Grafana
-27. **API Documentation** - Swagger/OpenAPI
-28. **Pagination** - Para GetAllBookmarks
-29. **Search y Filtering** - Por tags, title, url
-30. **Bulk Operations** - Crear múltiples bookmarks
-31. **Caching** - Redis para queries frecuentes
-32. **Background Jobs** - Para metadata scraping
-33. **WebSockets** - Real-time updates (opcional)
-34. **GraphQL** - API alternativa (opcional)
-35. **Admin Panel** - Para gestión de usuarios
+21. **Tests unitarios** - Coverage de controllers y services
+22. **Health check endpoint** - `/health` para monitoring
+23. **Pagination** - Para listados de bookmarks
+24. **Caching** - Redis para queries frecuentes
+25. **Metrics** - Prometheus/Grafana
 
-**Estimado: Según prioridades del negocio**
+**Tiempo estimado:** Variable según prioridades de negocio
+**Prioridad:** BAJA - Post-launch improvements
 
 ---
 
@@ -1686,47 +1956,55 @@ if err := c.ShouldBindJSON(&data); err != nil {
 
 | Fase | Issues | Impacto | Tiempo | Prioridad |
 |------|--------|---------|--------|-----------|
-| Bloqueadores | 5 | 🔴 CRÍTICO | 1-2 días | **INMEDIATO** |
-| Alta Prioridad | 7 | 🟠 ALTO | 3-5 días | Semana 1 |
-| Mejoras Calidad | 10 | 🟡 MEDIO | 1-2 semanas | Semana 2-3 |
-| Optimizaciones | 13 | 🟢 BAJO | Variable | Post-launch |
+| Bloqueadores Críticos | 3 | 🔴 CRÍTICO | 2-3 días | **MÁXIMA** |
+| Alta Prioridad | 8 | 🟠 ALTO | 4-6 días | Semana 1 |
+| Mejoras Calidad | 12 | 🟡 MEDIO | 1-2 semanas | Semana 2-3 |
+| Optimizaciones | 5 | 🟢 BAJO | Variable | Post-launch |
+| **TOTAL** | **28** | - | ~3-4 semanas | -|
 
 ---
 
 ### ✅ Checklist Pre-Producción
 
-Antes de desplegar a producción, verificar:
+**🚫 BLOQUEADORES - Debe estar completo 100%:**
 
-- [ ] **Seguridad**
-  - [ ] Autenticación activa en todos los endpoints
-  - [ ] UserID viene del token, no del request body
-  - [ ] Validación de ownership en UPDATE/DELETE
-  - [ ] Errores internos no se exponen al cliente
+- [ ] **Seguridad Crítica**
+  - [ ] ✅ Autenticación activada: `protected.Use(middleware.Protect)` descomentado
+  - [ ] ✅ JWT validado completamente: firma, expiración, claims extraídos
+  - [ ] ✅ UserID viene del token JWT, NO del request body
+  - [ ] ✅ Validación de URLs: solo http:// y https:// permitidos
+  - [ ] ✅ UserID se guarda en contexto Gin para uso en controllers
+
+**🟠 ALTA PRIORIDAD - Debe completarse antes de producción:**
+
+- [ ] **Funcionalidad y Estabilidad**
+  - [ ] Connection pool configurado (MaxOpenConns, MaxIdleConns, Lifetimes)
+  - [ ] UpdateBookmark implementado completamente con validación de ownership
+  - [ ] N+1 queries resueltas con Preload en todos los repositories
+  - [ ] Detección de duplicados corregida (OR en vez de AND)
+  - [ ] Validación de ownership en DeleteBookmark
+  - [ ] Validación de ownership en UpdateBookmark
+  - [ ] Validación de ownership en GetBookmarkByID (opcional)
+  - [ ] Migration error checking en cmd/api/main.go
+
+**🟡 RECOMENDADO - Mejora calidad:**
+
+- [ ] **Calidad de Código**
+  - [ ] Manejo de errores estandarizado (utils/response.go)
+  - [ ] Structured logging implementado (slog)
   - [ ] CORS configurado correctamente
-  - [ ] Rate limiting implementado
-
-- [ ] **Estabilidad**
-  - [ ] Todos los errores GORM se verifican
-  - [ ] Return statements después de error responses
-  - [ ] Migraciones verificadas al startup
-  - [ ] Connection pool configurado
   - [ ] Graceful shutdown implementado
-  - [ ] Recovery middleware activo
+  - [ ] Validation tags mejoradas con min/max lengths
+  - [ ] Database indexes creados (user_id, created_at, etc.)
 
-- [ ] **Performance**
-  - [ ] N+1 queries resueltas con Preload
-  - [ ] Índices de database creados
-  - [ ] Context timeouts implementados
+**🟢 OPCIONAL - Nice to have:**
 
-- [ ] **Observability**
-  - [ ] Structured logging implementado
-  - [ ] Request ID tracking activo
-  - [ ] Health check endpoint disponible
-
-- [ ] **Tests**
-  - [ ] Tests unitarios de handlers críticos
-  - [ ] Tests de integración de endpoints principales
-  - [ ] Tests de autenticación y autorización
+- [ ] **Extras**
+  - [ ] Tests unitarios (coverage >70%)
+  - [ ] Health check endpoint
+  - [ ] Pagination en listados
+  - [ ] Request ID tracking
+  - [ ] Rate limiting
 
 ---
 
@@ -1767,46 +2045,62 @@ Antes de desplegar a producción, verificar:
 
 ## 📝 HISTORIAL DE ACTUALIZACIONES
 
-### Actualización: 13 de Noviembre 2025
+### Actualización: 18 de Noviembre 2025
+
+**Análisis completo realizado por:** go-project-analyzer agent
 
 **Cambios principales:**
-- Issues identificadas: 29 → **35**
-- Distribución actualizada: 5 Críticos, 10 Alta, 14 Media, 6 Baja
-- **Nuevos hallazgos críticos:**
-  - Autenticación deshabilitada (vulnerabilidad de seguridad masiva)
-  - UserID injection vulnerability (permite manipular datos de otros usuarios)
-  - Sin configuración de connection pool (colapso bajo carga)
-  - Falta validación de ownership en UPDATE/DELETE
-- **Nuevos hallazgos de alta prioridad:**
-  - N+1 query problems en múltiples handlers
-  - Debug statements en código de producción
-  - Mensajes de error inconsistentes (español/inglés mezclados)
-  - Falta de structured logging
-- **Nuevos hallazgos de media prioridad:**
-  - Falta CORS configuration
-  - Sin graceful shutdown
-  - Sin global error handler
-  - Missing request ID tracking
-  - Falta de índices en queries frecuentes
+- Issues totales identificadas: **28** (reducción de 35 → 28 tras análisis más preciso)
+- **Distribución final:** 3 Críticos, 8 Alta Prioridad, 12 Media Prioridad, 5 Baja Prioridad
+- **Arquitectura evaluada:** ✅ Excelente (patrón de capas: controllers → services → repositories)
+- **Estado general:** ⚠️ **Requiere correcciones críticas de seguridad antes de producción**
 
-**Recomendación principal:**
-⚠️ **NO DESPLEGAR EN PRODUCCIÓN** hasta resolver los 5 problemas críticos (bloqueadores). El sistema actual tiene vulnerabilidades de seguridad graves que permiten acceso no autorizado y manipulación de datos.
+**Hallazgos críticos (bloqueadores):**
+1. **Autenticación completamente deshabilitada** - Middleware comentado en routes.go
+2. **JWT validation incompleta** - Solo verifica presencia, no valida firma ni expiración
+3. **Sin validación de URLs** - Permite inyección de javascript:, data:, file:// (XSS/phishing)
+
+**Hallazgos de alta prioridad (funcionalidad/performance):**
+4. **Sin configuración de connection pool** - Colapso bajo carga en producción
+5. **UpdateBookmark incompleto** - Busca el bookmark pero nunca actualiza
+6. **Problemas N+1 de performance** - Falta Preload consistente
+7. **Detección de duplicados rota** - Usa AND en vez de OR
+8. **Sin validación de ownership** - Usuarios pueden eliminar bookmarks de otros
+
+**Mejoras identificadas:**
+- Mejor claridad en prioridades (3 bloqueadores vs 8 alta prioridad)
+- Soluciones más específicas y actualizadas para Go 1.25.2
+- Plan de acción más realista (2-3 días para críticos, 1 semana para alta prioridad)
+- Foco en seguridad primero, luego funcionalidad, luego calidad
+
+**Diferencias vs análisis anterior:**
+- ❌ Eliminados: Issues duplicados y falsos positivos
+- ✅ Agregados: Detalles específicos de implementación actual (servicios/repositorios)
+- ✅ Mejorados: Ejemplos de código con soluciones completas
+- ✅ Actualizado: Ubicaciones exactas de archivos y líneas
+
+**Recomendación actualizada:**
+🚫 **DEPLOYMENT BLOQUEADO** - Resolver 3 bloqueadores críticos (2-3 días) antes de cualquier deployment. Sin estas correcciones, la API es completamente insegura y vulnerable.
 
 ---
 
 ## 🤝 SIGUIENTE PASO
 
-¿Te gustaría que implemente alguna de estas correcciones en particular? Puedo:
+Prioridades claras para deployment seguro:
 
-1. **Corregir los 5 bloqueadores críticos** (recomendado para seguridad)
-2. **Implementar UpdateBookmark completo** con validación de ownership
-3. **Activar autenticación y corregir UserID injection**
-4. **Configurar connection pool y verificar migraciones**
-5. **Implementar sistema de logging estructurado**
-6. **Crear helper de respuestas estandarizadas**
-7. **Resolver problemas de N+1 queries**
-8. **Agregar tests unitarios para handlers críticos**
+**FASE 1 - BLOQUEADORES (2-3 días):**
+1. ✅ Activar y completar autenticación JWT
+2. ✅ Implementar validación de URLs (solo http/https)
+3. ✅ Obtener UserID del token (no del request body)
 
-**Prioridad sugerida:** Empezar con los bloqueadores críticos (#1-5) antes que cualquier otra mejora.
+**FASE 2 - ESTABILIDAD (4-6 días):**
+4. Configurar connection pool
+5. Completar UpdateBookmark
+6. Resolver N+1 queries
+7. Corregir detección de duplicados
+8. Agregar validación de ownership
 
-**¡Solo pregunta y comenzamos!** 🚀
+**¿Por dónde empezar?**
+Recomiendo comenzar con la **Fase 1 completa** antes de pasar a Fase 2. Cada issue crítico tiene solución detallada en el documento arriba.
+
+**¡Pronto estarás listo para producción!** 🚀
