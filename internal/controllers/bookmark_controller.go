@@ -330,3 +330,189 @@ func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
 	})
 
 }
+
+func (ctrl *BookmarkController) IncrementVisitCountController(c *gin.Context) {
+
+	bookmarkIDStr := c.Param("id")
+	userID := c.GetString("user_id")
+
+	bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+
+	if err != nil || bookmarkID <= 0 {
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Formato de ID invalido",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este id",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al encontrar el bookmark" + err.Error(),
+		})
+
+		return
+	}
+
+	bookmarkUpdated, err := ctrl.service.IncrementVisitCountService(uint(bookmarkID), userID)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este ID",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al buscar bookmark",
+			"error":   err.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark actualizado successfully",
+		"data":    bookmarkUpdated,
+	})
+
+}
+
+func (ctrl *BookmarkController) TogglePinnedByIDController(c *gin.Context) {
+
+	bookmarkIDStr := c.Param("id")
+	userID := c.GetString("user_id")
+
+	bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+
+	if err != nil || bookmarkID <= 0 {
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Formato de ID invalido",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este id",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al encontrar el bookmark" + err.Error(),
+		})
+
+		return
+	}
+
+	bookmarkUpdated, err := ctrl.service.TogglePinnedByIDService(uint(bookmarkID), userID)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este ID",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al buscar bookmark",
+			"error":   err.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark actualizado successfully",
+		"data":    bookmarkUpdated,
+	})
+
+}
+
+func (ctrl *BookmarkController) ToggleIsArchiveByIDController(c *gin.Context) {
+
+	bookmarkIDStr := c.Param("id")
+	userID := c.GetString("user_id")
+
+	bookmarkID, err := strconv.Atoi(bookmarkIDStr)
+
+	if err != nil || bookmarkID <= 0 {
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Formato de ID invalido",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este id",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al encontrar el bookmark" + err.Error(),
+		})
+
+		return
+	}
+
+	bookmarkUpdated, err := ctrl.service.ToggleIsArchiveByIDService(uint(bookmarkID), userID)
+
+	if err != nil {
+
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "No se encontro bookmark con este ID",
+			})
+
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al buscar bookmark",
+			"error":   err.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmark actualizado successfully",
+		"data":    bookmarkUpdated,
+	})
+
+}

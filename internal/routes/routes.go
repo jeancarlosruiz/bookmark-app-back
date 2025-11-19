@@ -27,6 +27,9 @@ func Setup(router *gin.Engine) {
 		protected.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
 		protected.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
 		protected.PUT("/bookmark/update/:id", bookmarkCtrl.UpdateBookmark)
+		protected.PUT("/bookmark/view-count/:id", bookmarkCtrl.IncrementVisitCountController)
+		protected.PUT("/bookmark/:id/toggle-pinned", bookmarkCtrl.TogglePinnedByIDController)
+		protected.PUT("/bookmark/:id/toggle-is-archived", bookmarkCtrl.ToggleIsArchiveByIDController)
 		protected.DELETE("/bookmark/:id", bookmarkCtrl.DeleteBookmark)
 	}
 }

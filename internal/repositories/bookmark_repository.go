@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"time"
+
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"gorm.io/gorm"
@@ -110,4 +112,61 @@ func (r *BookmarkRepository) UpdateBookmarkByID(id uint, userID string, update m
 	}
 
 	return &bookmark, nil
+}
+
+func (r *BookmarkRepository) IncrementVisitCount(id uint, userID string) (*models.Bookmarks, error) {
+
+	err := r.db.Model(&models.Bookmarks{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]interface{}{
+		"visit_count":  gorm.Expr("visit_count + 1"),
+		"last_visited": time.Now(),
+	}).Error
+
+	if err != nil {
+
+		return nil, err
+	}
+
+	bookmark, err := r.FindByIDWithTags(id, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmark, nil
+}
+
+func (r *BookmarkRepository) TogglePinnedByID(id uint, userID string) (*models.Bookmarks, error) {
+
+	err := r.db.Model(&models.Bookmarks{}).Where("id = ? AND user_id = ?", id, userID).Update("pinned", gorm.Expr("NOT pinned")).Error
+
+	if err != nil {
+
+		return nil, err
+	}
+
+	bookmark, err := r.FindByIDWithTags(id, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmark, nil
+}
+
+func (r *BookmarkRepository) ToggleIsArchiveByID(id uint, userID string) (*models.Bookmarks, error) {
+
+	err := r.db.Model(&models.Bookmarks{}).Where("id = ? AND user_id = ?", id, userID).Update("is_archived", gorm.Expr("NOT is_archived")).Error
+
+	if err != nil {
+
+		return nil, err
+	}
+
+	bookmark, err := r.FindByIDWithTags(id, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmark, nil
 }

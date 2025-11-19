@@ -58,13 +58,13 @@
 
 ### Día 9
 
-[] Añadir campos `view_count`, `last_visited_at`.
-[] Endpoint para incrementar visitas.
+[x] Añadir campos `view_count`, `last_visited_at`.
+[x] Endpoint para incrementar visitas.
 
 ### Día 10
 
-[] Campos booleanos `is_pinned`, `is_archived`.
-[] Endpoints de actualización rápida.
+[x] Campos booleanos `is_pinned`, `is_archived`.
+[x] Endpoints de actualización rápida.
 
 ---
 
@@ -72,8 +72,8 @@
 
 ### Día 11
 
-- Crear endpoints `/auth/register` y `/auth/login`.
-- Generar tokens JWT.
+[x] Crear endpoints `/auth/register` y `/auth/login`.
+[x] Generar tokens JWT.
 
 ### Día 12
 

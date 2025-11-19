@@ -122,6 +122,36 @@ func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint, userID string) 
 	return bookmark, nil
 }
 
+func (s *BookmarkService) IncrementVisitCountService(id uint, userID string) (*models.Bookmarks, error) {
+	bookmark, err := s.bookmarkRepo.IncrementVisitCount(id, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmark, nil
+}
+
+func (s *BookmarkService) TogglePinnedByIDService(id uint, userID string) (*models.Bookmarks, error) {
+	bookmark, err := s.bookmarkRepo.TogglePinnedByID(id, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmark, nil
+}
+
+func (s *BookmarkService) ToggleIsArchiveByIDService(id uint, userID string) (*models.Bookmarks, error) {
+	bookmark, err := s.bookmarkRepo.ToggleIsArchiveByID(id, userID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmark, nil
+}
+
 func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data validator.UpdateBookmark) (*models.Bookmarks, error) {
 	updates := make(map[string]interface{})
 
