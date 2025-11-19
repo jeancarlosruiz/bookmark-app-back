@@ -1,10 +1,12 @@
 package validator
 
 type CreateBookmark struct {
-	Title  string   `validate:"required"`
-	Url    string   `validate:"required"`
-	UserID string   `validate:"required"`
-	Tags   []string `validate:"omitempty,dive,min=1"`
+	Title       string   `json:"title" validate:"required,min=1,max=200"`
+	Url         string   `json:"url" validate:"required,url"`
+	Description string   `json:"description" validate:"omitempty,max=1000"`
+	Favicon     string   `json:"favicon" validate:"omitempty,url"`
+	UserID      string   `json:"user_id" validate:"required"`
+	Tags        []string `json:"tags" validate:"omitempty,dive,min=1"`
 }
 
 type UpdateBookmark struct {

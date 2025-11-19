@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
@@ -515,4 +516,42 @@ func (ctrl *BookmarkController) ToggleIsArchiveByIDController(c *gin.Context) {
 		"data":    bookmarkUpdated,
 	})
 
+}
+
+func (ctrl *BookmarkController) PreviewMetadata(c *gin.Context) {
+	url := c.Query("url")
+
+	if url == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "URL es requerida",
+		})
+
+		return
+	}
+
+	scraperService := services.NewScraperService()
+	metadata := scraperService.ScrapeMetadataAsync(url, 8*time.Second)
+
+	if metadata.Error != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se pudieron obtener metadatos completos",
+			"data": gin.H{
+				"title":       metadata.Title,
+				"description": metadata.Description,
+				"favicon":     metadata.Favicon,
+			},
+			"error": metadata.Error.Error(),
+		})
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Metadatos obtenidos exitosamente",
+		"data": gin.H{
+			"title":       metadata.Title,
+			"description": metadata.Description,
+			"favicon":     metadata.Favicon,
+		},
+	})
 }

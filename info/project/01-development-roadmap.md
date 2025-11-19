@@ -82,8 +82,8 @@
 
 ### Día 13
 
-- Implementar scraping de metadatos (favicon, title, description).
-- Usar `goquery` o `colly`.
+[x] Implementar scraping de metadatos (favicon, title, description).
+[x] Usar `goquery` o `colly`.
 
 ### Día 14
 
