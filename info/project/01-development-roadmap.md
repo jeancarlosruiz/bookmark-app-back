@@ -77,8 +77,8 @@
 
 ### Día 12
 
-- Middleware de autenticación.
-- Asociar `user_id` en todos los bookmarks.
+[x] Middleware de autenticación.
+[x] Asociar `user_id` en todos los bookmarks.
 
 ### Día 13
 
