@@ -1,6 +1,8 @@
 module github.com/jeancarlosruiz/bookmark-app-back
 
-go 1.25.2
+go 1.24.0
+
+toolchain go1.24.2
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
