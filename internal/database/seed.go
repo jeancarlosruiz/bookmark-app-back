@@ -37,9 +37,9 @@ func SeedDatabase(userID string) error {
 	var user models.User
 	result := DB.First(&user, "id = ?", userID)
 	if result.Error != nil {
-		return fmt.Errorf("❌ User with ID '%s' not found in neon_auth.users_sync.\n   Please create a user first or use a valid user ID.\n   Error: %w", userID, result.Error)
+		return fmt.Errorf("❌ User with ID '%s' not found in public.user (Better Auth).\n   Please create a user first or use a valid user ID.\n   Error: %w", userID, result.Error)
 	}
-	fmt.Printf("✓ Validated user: %s (%s)\n\n", user.Name, user.Email)
+	fmt.Printf("✓ Validated user: %s\n\n", user.ID)
 
 	// Read the JSON file
 	file, err := os.ReadFile("data.json")
@@ -111,7 +111,7 @@ func SeedDatabase(userID string) error {
 			if strings.Contains(err.Error(), "fk_bookmarks_user") ||
 				strings.Contains(err.Error(), "foreign key constraint") ||
 				strings.Contains(err.Error(), "violates foreign key") {
-				return fmt.Errorf("❌ Foreign key constraint error: User ID '%s' does not exist in neon_auth.users_sync.\n   This should not happen as we validated the user earlier.\n   Error: %w", userID, err)
+				return fmt.Errorf("❌ Foreign key constraint error: User ID '%s' does not exist in public.user (Better Auth).\n   This should not happen as we validated the user earlier.\n   Error: %w", userID, err)
 			}
 
 			// For other errors (like duplicate URLs/titles), just warn and continue
