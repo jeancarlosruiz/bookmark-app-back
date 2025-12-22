@@ -1,6 +1,8 @@
 .env
 //todo.md
 /.DS_Store
+tmp/
+vendor/
 
 CLAUDE.md
 .claude/
