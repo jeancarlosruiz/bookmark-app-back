@@ -1,7 +1,7 @@
 # Multi-stage build for production
 
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Build static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
 
 # Final stage
 FROM alpine:latest
