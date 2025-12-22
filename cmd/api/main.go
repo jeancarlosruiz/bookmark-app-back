@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/config"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
+	"github.com/jeancarlosruiz/bookmark-app-back/internal/middleware"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/routes"
 )
@@ -31,6 +32,7 @@ func main() {
 	router := gin.Default()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+	router.Use(middleware.CORS())
 
 	routes.Setup(router)
 

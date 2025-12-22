@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -25,4 +26,14 @@ func GetRedisURL() string {
 		return "redis://localhost:6379/0"
 	}
 	return url
+}
+
+func GetAllowedOrigins() []string {
+	origins := os.Getenv("ALLOWED_ORIGINS")
+	if origins == "" {
+		// Default to localhost for development
+		return []string{"http://localhost:3000"}
+	}
+	// Split comma-separated origins
+	return strings.Split(origins, ",")
 }

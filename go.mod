@@ -7,6 +7,7 @@ toolchain go1.24.2
 require (
 	github.com/MicahParks/keyfunc/v3 v3.7.0
 	github.com/PuerkitoBio/goquery v1.11.0
+	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
