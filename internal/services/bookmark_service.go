@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
@@ -12,12 +13,14 @@ import (
 type BookmarkService struct {
 	bookmarkRepo *repositories.BookmarkRepository
 	tagService   *TagService
+	cacheService *CacheService
 }
 
 func NewBookmarkService() *BookmarkService {
 	return &BookmarkService{
 		bookmarkRepo: repositories.NewBookmarkRepository(),
 		tagService:   NewTagService(),
+		cacheService: &CacheService{},
 	}
 }
 
@@ -51,6 +54,11 @@ func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (
 		return nil, err
 	}
 
+	// INVALIDACIÓN DE CACHÉ: Crucial después de crear un bookmark
+	// El caché del usuario ahora está desactualizado
+	ctx := context.Background()
+	_ = s.cacheService.InvalidateUserCache(ctx, data.UserID)
+
 	return bookmark, nil
 }
 
@@ -67,7 +75,15 @@ func (s *BookmarkService) FindByIDWithTagsService(id uint, userID string) (*mode
 }
 
 func (s *BookmarkService) FindByUserIDWithTagService(userID string) ([]models.Bookmarks, error) {
+	ctx := context.Background()
 
+	// CACHE HIT PATH: Intentar obtener desde caché
+	cachedBookmarks, hit, err := s.cacheService.GetBookmarksFromCache(ctx, userID)
+	if hit && err == nil {
+		return cachedBookmarks, nil
+	}
+
+	// CACHE MISS PATH: Consultar base de datos
 	bookmarks, err := s.bookmarkRepo.FindByUserIDWithTags(userID)
 
 	if err == gorm.ErrRecordNotFound {
@@ -77,6 +93,10 @@ func (s *BookmarkService) FindByUserIDWithTagService(userID string) ([]models.Bo
 	if err != nil {
 		return nil, err
 	}
+
+	// Guardar en caché para futuras consultas
+	// No retornamos error si el caché falla - la app continúa funcionando
+	_ = s.cacheService.SetBookmarksCache(ctx, userID, bookmarks)
 
 	return bookmarks, nil
 
@@ -119,6 +139,10 @@ func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint, userID string) 
 		return nil, err
 	}
 
+	// INVALIDACIÓN DE CACHÉ: Crucial después de eliminar un bookmark
+	ctx := context.Background()
+	_ = s.cacheService.InvalidateUserCache(ctx, userID)
+
 	return bookmark, nil
 }
 
@@ -139,6 +163,10 @@ func (s *BookmarkService) TogglePinnedByIDService(id uint, userID string) (*mode
 		return nil, err
 	}
 
+	// INVALIDACIÓN DE CACHÉ: Crucial después de cambiar el estado de un bookmark
+	ctx := context.Background()
+	_ = s.cacheService.InvalidateUserCache(ctx, userID)
+
 	return bookmark, nil
 }
 
@@ -148,6 +176,10 @@ func (s *BookmarkService) ToggleIsArchiveByIDService(id uint, userID string) (*m
 	if err != nil {
 		return nil, err
 	}
+
+	// INVALIDACIÓN DE CACHÉ: Crucial después de cambiar el estado de un bookmark
+	ctx := context.Background()
+	_ = s.cacheService.InvalidateUserCache(ctx, userID)
 
 	return bookmark, nil
 }
@@ -196,7 +228,16 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 
 	}
 
-	return s.bookmarkRepo.FindByIDWithTags(id, userID)
+	bookmark, err := s.bookmarkRepo.FindByIDWithTags(id, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// INVALIDACIÓN DE CACHÉ: Crucial después de actualizar un bookmark
+	ctx := context.Background()
+	_ = s.cacheService.InvalidateUserCache(ctx, userID)
+
+	return bookmark, nil
 }
 
 var (

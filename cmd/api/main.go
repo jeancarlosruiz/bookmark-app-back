@@ -19,6 +19,12 @@ func main() {
 		panic("Failed to connect to DB" + err.Error())
 	}
 
+	// Conectar a Redis (no falla si Redis no está disponible)
+	if err := database.ConnectRedis(); err != nil {
+		fmt.Printf("Warning: %v\n", err)
+	}
+	defer database.CloseRedis()
+
 	// Note: User table is NOT migrated as it exists in external auth schema (neon_auth.users_sync)
 	database.DB.AutoMigrate(&models.Bookmarks{}, &models.Tag{}, &models.BookmarkTag{})
 

@@ -17,3 +17,12 @@ func Load() error {
 func GetPort() string {
 	return os.Getenv("PORT")
 }
+
+func GetRedisURL() string {
+	url := os.Getenv("REDIS_URL")
+	if url == "" {
+		// Default to localhost for development
+		return "redis://localhost:6379/0"
+	}
+	return url
+}

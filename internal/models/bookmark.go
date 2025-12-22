@@ -7,18 +7,21 @@ import (
 )
 
 type Bookmarks struct {
-	gorm.Model
-	Title       string `gorm:"not null"`
-	Url         string `gorm:"not null;index"`
-	Favicon     string
-	Description string
-	Pinned      bool  `gorm:"default:false"`
-	IsArchived  bool  `gorm:"default:false"`
-	VisitCount  int   `gorm:"default:0"`
-	Tags        []Tag `gorm:"many2many:bookmark_tags;foreignKey:ID;joinForeignKey:BookmarkID;References:ID;joinReferences:TagID"`
-	LastVisited time.Time
+	ID          uint           `gorm:"primarykey" json:"id"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deletedAt"`
+	Title       string         `gorm:"not null" json:"title"`
+	Url         string         `gorm:"not null;index" json:"url"`
+	Favicon     string         `json:"favicon"`
+	Description string         `json:"description"`
+	Pinned      bool           `gorm:"default:false" json:"pinned"`
+	IsArchived  bool           `gorm:"default:false" json:"isArchived"`
+	VisitCount  int            `gorm:"default:0" json:"visitCount"`
+	Tags        []Tag          `gorm:"many2many:bookmark_tags;foreignKey:ID;joinForeignKey:BookmarkID;References:ID;joinReferences:TagID" json:"tags"`
+	LastVisited time.Time      `json:"lastVisited"`
 
 	// User relationship
-	UserID string `gorm:"column:user_id;not null;index" json:"user_id"`
+	UserID string `gorm:"column:user_id;not null;index" json:"userId"`
 	User   User   `gorm:"foreignKey:UserID;references:ID" json:"-"`
 }
