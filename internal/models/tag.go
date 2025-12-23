@@ -15,3 +15,9 @@ type Tag struct {
 	UserID    string         `gorm:"index;not null" json:"userId"`
 	Bookmarks []Bookmarks    `gorm:"many2many:bookmark_tags;foreignKey:ID;joinForeignKey:TagID;References:ID;joinReferences:BookmarkID" json:"-"`
 }
+
+// TagWithCount includes the Tag model plus the count of associated bookmarks
+type TagWithCount struct {
+	Tag
+	TotalBookmarks int64 `json:"totalBookmarks"`
+}

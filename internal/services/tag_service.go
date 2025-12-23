@@ -18,9 +18,9 @@ func NewTagService() *TagService {
 	}
 }
 
-func (s *TagService) FindByUserIDService(userId string) ([]models.Tag, error) {
+func (s *TagService) FindByUserIDService(userId string) ([]models.TagWithCount, error) {
 
-	tags, err := s.repo.FindByUserID(userId)
+	tags, err := s.repo.FindByUserIDWithCount(userId)
 
 	if err != nil {
 		return nil, err
