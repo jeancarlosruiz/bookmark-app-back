@@ -16,6 +16,19 @@ func NewTagRepository() *TagRepository {
 	}
 }
 
+func (r *TagRepository) FindByUserID(userID string) ([]models.Tag, error) {
+	var tags []models.Tag
+
+	err := r.db.Where("user_id = ?", userID).Find(&tags).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+
+}
+
 func (r *TagRepository) FindByTitleAndUserID(title string, userID string) (*models.Tag, error) {
 
 	var tag models.Tag

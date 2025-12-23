@@ -8,29 +8,31 @@ import (
 )
 
 func Setup(router *gin.Engine) {
-	protected := router.Group("/api")
+	protectedGroup := router.Group("/api")
 	bookmarkCtrl := controllers.NewBookmarkController()
+	tagCtrl := controllers.NewTagController()
 	// Ponerlo al final
-	protected.Use(middleware.Protect)
+	protectedGroup.Use(middleware.Protect)
 
 	// Agrupar todas las rutas con el middleware deseado
 	{
 		// Users
-		protected.GET("/users", controllers.GetUsers)
+		protectedGroup.GET("/users", controllers.GetUsers)
 
 		//Bookmarks
-		// Esta ya no existe
-		// protected.GET("/bookmark", bookmarkCtrl.GetBookmarks)
-		protected.GET("/bookmark/:id", bookmarkCtrl.GetBookmarkByID)
-		protected.GET("/bookmark/search", bookmarkCtrl.SearchBookmarkByTitle)
-		protected.GET("/bookmark/tags", bookmarkCtrl.SearchBookmarkByTags)
-		protected.GET("/bookmark/preview", bookmarkCtrl.PreviewMetadata)
-		protected.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
-		protected.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
-		protected.PUT("/bookmark/update/:id", bookmarkCtrl.UpdateBookmark)
-		protected.PUT("/bookmark/view-count/:id", bookmarkCtrl.IncrementVisitCountController)
-		protected.PUT("/bookmark/:id/toggle-pinned", bookmarkCtrl.TogglePinnedByIDController)
-		protected.PUT("/bookmark/:id/toggle-is-archived", bookmarkCtrl.ToggleIsArchiveByIDController)
-		protected.DELETE("/bookmark/:id", bookmarkCtrl.DeleteBookmark)
+		protectedGroup.GET("/bookmark/:id", bookmarkCtrl.GetBookmarkByID)
+		protectedGroup.GET("/bookmark/search", bookmarkCtrl.SearchBookmarkByTitle)
+		protectedGroup.GET("/bookmark/tags", bookmarkCtrl.SearchBookmarkByTags)
+		protectedGroup.GET("/bookmark/preview", bookmarkCtrl.PreviewMetadata)
+		protectedGroup.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
+		protectedGroup.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
+		protectedGroup.PUT("/bookmark/update/:id", bookmarkCtrl.UpdateBookmark)
+		protectedGroup.PUT("/bookmark/view-count/:id", bookmarkCtrl.IncrementVisitCountController)
+		protectedGroup.PUT("/bookmark/:id/toggle-pinned", bookmarkCtrl.TogglePinnedByIDController)
+		protectedGroup.PUT("/bookmark/:id/toggle-is-archived", bookmarkCtrl.ToggleIsArchiveByIDController)
+		protectedGroup.DELETE("/bookmark/:id", bookmarkCtrl.DeleteBookmark)
+
+		//Tags
+		protectedGroup.GET("/tags/:user_id", tagCtrl.FindTagsByUserID)
 	}
 }

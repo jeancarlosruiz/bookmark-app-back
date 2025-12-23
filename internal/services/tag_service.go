@@ -18,6 +18,17 @@ func NewTagService() *TagService {
 	}
 }
 
+func (s *TagService) FindByUserIDService(userId string) ([]models.Tag, error) {
+
+	tags, err := s.repo.FindByUserID(userId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+}
+
 func (s *TagService) FindOrCreateTags(tagNames []string, userID string) ([]models.Tag, error) {
 	var tags []models.Tag
 	tagMap := make(map[string]models.Tag)
