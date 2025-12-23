@@ -96,13 +96,9 @@ func SeedDatabase(userID string) error {
 			Pinned:      bookmarkSeed.Pinned,
 			IsArchived:  bookmarkSeed.IsArchived,
 			VisitCount:  bookmarkSeed.VisitCount,
+			LastVisited: bookmarkSeed.LastVisited,
 			Tags:        tags,
 			UserID:      userID,
-		}
-
-		// Set LastVisited if it exists
-		if bookmarkSeed.LastVisited != nil {
-			bookmark.LastVisited = *bookmarkSeed.LastVisited
 		}
 
 		// Create the bookmark
