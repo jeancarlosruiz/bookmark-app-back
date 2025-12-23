@@ -19,7 +19,7 @@ type Bookmarks struct {
 	IsArchived  bool           `gorm:"default:false" json:"isArchived"`
 	VisitCount  int            `gorm:"default:0" json:"visitCount"`
 	Tags        []Tag          `gorm:"many2many:bookmark_tags;foreignKey:ID;joinForeignKey:BookmarkID;References:ID;joinReferences:TagID" json:"tags"`
-	LastVisited time.Time      `json:"lastVisited"`
+	LastVisited *time.Time     `gorm:"default:null" json:"lastVisited"`
 
 	// User relationship
 	UserID string `gorm:"column:user_id;not null;index" json:"userId"`
