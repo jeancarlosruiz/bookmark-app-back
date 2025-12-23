@@ -52,7 +52,7 @@ func (r *BookmarkRepository) FindByIDWithTags(id uint, userID string) (*models.B
 func (r *BookmarkRepository) FindByUserIDWithTags(userID string) ([]models.Bookmarks, error) {
 	var bookmarks []models.Bookmarks
 
-	err := r.db.Preload("Tags").Where("user_id = ?", userID).Find(&bookmarks).Error
+	err := r.db.Preload("Tags").Where("user_id = ?", userID).Where("is_archived = ?", false).Order("pinned DESC, updated_at DESC").Find(&bookmarks).Error
 
 	if err != nil {
 		return nil, err
