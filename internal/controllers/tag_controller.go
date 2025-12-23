@@ -18,7 +18,7 @@ func NewTagController() *TagController {
 }
 
 func (ctrl *TagController) FindTagsByUserID(c *gin.Context) {
-	userID := c.Params("user_id")
+	userID := c.Param("user_id")
 
 	tags, err := ctrl.service.FindByUserIDService(userID)
 
