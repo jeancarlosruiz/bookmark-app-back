@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,6 +27,17 @@ const (
 	// - Suficientemente corto para mantener datos frescos
 	// - Ajustar según patrones de uso reales
 	bookmarkCacheTTL = 10 * time.Minute
+
+	// Formato de clave para metadata: metadata:url:{hash(url)}
+	// Usar hash SHA256 de la URL para evitar problemas con caracteres especiales
+	metadataCacheKeyPrefix = "metadata:url:"
+
+	// TTL recomendado para metadata: 24 horas
+	// - Los metadatos de URLs raramente cambian
+	// - Reduce carga en sitios externos (scraping)
+	// - Protege contra rate limiting
+	// - Mejora UX con respuestas instantáneas
+	metadataCacheTTL = 24 * time.Hour
 )
 
 // GetBookmarksFromCache intenta obtener bookmarks desde caché
@@ -162,4 +175,96 @@ func (s *CacheService) GetCacheStats() *redis.PoolStats {
 		return nil
 	}
 	return database.RedisClient.PoolStats()
+}
+
+// === METADATA CACHING ===
+
+// GetMetadataFromCache intenta obtener metadata de una URL desde caché
+// Retorna (metadata, hit, error)
+// - metadata: datos si hay cache hit
+// - hit: true si hubo cache hit, false si cache miss
+// - error: solo si hay error crítico (no es error si la clave no existe)
+func (s *CacheService) GetMetadataFromCache(ctx context.Context, url string) (*MetadataResult, bool, error) {
+	// Si Redis no está disponible, retornar cache miss sin error
+	if !database.IsRedisAvailable() {
+		return nil, false, nil
+	}
+
+	cacheKey := s.buildMetadataCacheKey(url)
+
+	// Intentar obtener datos del caché
+	data, err := database.RedisClient.Get(ctx, cacheKey).Result()
+
+	// Cache miss: la clave no existe (comportamiento esperado)
+	if err == redis.Nil {
+		log.Printf("Metadata cache MISS for URL: %s", url)
+		return nil, false, nil
+	}
+
+	// Error de conexión u otro problema crítico
+	if err != nil {
+		log.Printf("Metadata cache error for URL %s: %v", url, err)
+		// Retornar cache miss para que la app continúe con scraping
+		return nil, false, nil
+	}
+
+	// Cache hit: deserializar datos
+	var metadata MetadataResult
+	if err := json.Unmarshal([]byte(data), &metadata); err != nil {
+		log.Printf("Metadata cache deserialization error for URL %s: %v", url, err)
+		// Invalidar caché corrupto
+		database.RedisClient.Del(ctx, cacheKey)
+		return nil, false, nil
+	}
+
+	log.Printf("Metadata cache HIT for URL: %s", url)
+	return &metadata, true, nil
+}
+
+// SetMetadataCache almacena metadata de una URL en caché
+// Solo cachea si no hay errores críticos (permite cachear metadata parcial)
+func (s *CacheService) SetMetadataCache(ctx context.Context, url string, metadata *MetadataResult) error {
+	// Si Redis no está disponible, no hacer nada (la app continúa sin caché)
+	if !database.IsRedisAvailable() {
+		return nil
+	}
+
+	// No cachear errores de timeout/red (pueden ser temporales)
+	if metadata.Error != nil {
+		errorMsg := metadata.Error.Error()
+		// Solo cachear si hay datos parciales útiles
+		if metadata.Title == "" && metadata.Description == "" && metadata.Favicon == "" {
+			log.Printf("Skipping cache for URL %s due to complete failure: %v", url, metadata.Error)
+			return nil
+		}
+		log.Printf("Caching partial metadata for URL %s (error: %s)", url, errorMsg)
+	}
+
+	cacheKey := s.buildMetadataCacheKey(url)
+
+	// Serializar metadata a JSON
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		log.Printf("Metadata cache serialization error for URL %s: %v", url, err)
+		return err
+	}
+
+	// Guardar en caché con TTL
+	err = database.RedisClient.Set(ctx, cacheKey, data, metadataCacheTTL).Err()
+	if err != nil {
+		log.Printf("Metadata cache write error for URL %s: %v", url, err)
+		return err
+	}
+
+	log.Printf("Metadata cache SET for URL: %s (TTL=%v)", url, metadataCacheTTL)
+	return nil
+}
+
+// buildMetadataCacheKey construye la clave de caché para metadata de una URL
+// Formato: metadata:url:{hash(url)}
+// Usa hash SHA256 para evitar problemas con caracteres especiales en URLs
+func (s *CacheService) buildMetadataCacheKey(url string) string {
+	hash := sha256.Sum256([]byte(url))
+	hashStr := hex.EncodeToString(hash[:])
+	return fmt.Sprintf("%s%s", metadataCacheKeyPrefix, hashStr)
 }

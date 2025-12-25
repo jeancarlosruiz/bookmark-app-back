@@ -529,18 +529,56 @@ func (ctrl *BookmarkController) PreviewMetadata(c *gin.Context) {
 		return
 	}
 
+	// Crear servicios
+	cacheService := &services.CacheService{}
+	ctx := c.Request.Context()
+
+	// 1. CACHE HIT PATH: Intentar obtener metadata desde caché
+	if cachedMetadata, hit, _ := cacheService.GetMetadataFromCache(ctx, url); hit {
+		// Respuesta con datos cacheados
+		responseData := gin.H{
+			"title":       cachedMetadata.Title,
+			"description": cachedMetadata.Description,
+			"favicon":     cachedMetadata.Favicon,
+			"cached":      true,
+		}
+
+		if cachedMetadata.Error != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Metadatos obtenidos desde caché (parciales)",
+				"data":    responseData,
+				"error":   cachedMetadata.Error.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Metadatos obtenidos desde caché",
+			"data":    responseData,
+		})
+		return
+	}
+
+	// 2. CACHE MISS PATH: Hacer scraping de la URL
 	scraperService := services.NewScraperService()
 	metadata := scraperService.ScrapeMetadataAsync(url, 8*time.Second)
+
+	// 3. Guardar en caché (incluso metadata parcial)
+	cacheService.SetMetadataCache(ctx, url, metadata)
+
+	// 4. Responder al cliente
+	responseData := gin.H{
+		"title":       metadata.Title,
+		"description": metadata.Description,
+		"favicon":     metadata.Favicon,
+		"cached":      false,
+	}
 
 	if metadata.Error != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "No se pudieron obtener metadatos completos",
-			"data": gin.H{
-				"title":       metadata.Title,
-				"description": metadata.Description,
-				"favicon":     metadata.Favicon,
-			},
-			"error": metadata.Error.Error(),
+			"data":    responseData,
+			"error":   metadata.Error.Error(),
 		})
 
 		return
@@ -548,10 +586,6 @@ func (ctrl *BookmarkController) PreviewMetadata(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Metadatos obtenidos exitosamente",
-		"data": gin.H{
-			"title":       metadata.Title,
-			"description": metadata.Description,
-			"favicon":     metadata.Favicon,
-		},
+		"data":    responseData,
 	})
 }
