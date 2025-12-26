@@ -520,10 +520,33 @@ func (ctrl *BookmarkController) ToggleIsArchiveByIDController(c *gin.Context) {
 
 func (ctrl *BookmarkController) PreviewMetadata(c *gin.Context) {
 	url := c.Query("url")
+	userID := c.GetString("user_id")
 
 	if url == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "URL es requerida",
+		})
+
+		return
+	}
+
+	// Verificar si la URL ya existe para este usuario
+	err := ctrl.service.CheckURLExists(url, userID)
+
+	if err != nil {
+		if err == services.ErrBookmarkURLAlreadyExists {
+			c.JSON(http.StatusConflict, gin.H{
+				"message": "Ya existe un bookmark con esta URL",
+				"error":   err.Error(),
+			})
+
+			return
+		}
+
+		// Otro tipo de error de base de datos
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al verificar la URL",
+			"error":   err.Error(),
 		})
 
 		return

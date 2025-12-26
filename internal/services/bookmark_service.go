@@ -240,7 +240,25 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 	return bookmark, nil
 }
 
+func (s *BookmarkService) CheckURLExists(url string, userID string) error {
+	_, err := s.bookmarkRepo.FindByURL(url, userID)
+
+	if err == nil {
+		// El bookmark existe
+		return ErrBookmarkURLAlreadyExists
+	}
+
+	if err == gorm.ErrRecordNotFound {
+		// No existe, todo bien
+		return nil
+	}
+
+	// Otro tipo de error de base de datos
+	return err
+}
+
 var (
-	ErrBookmarkAlreadyExists = errors.New("bookmark with this title or URL already exists")
-	ErrBookmarksNotFound     = errors.New("Bookmarks not found")
+	ErrBookmarkAlreadyExists    = errors.New("bookmark with this title or URL already exists")
+	ErrBookmarksNotFound        = errors.New("Bookmarks not found")
+	ErrBookmarkURLAlreadyExists = errors.New("bookmark with this URL already exists for this user")
 )

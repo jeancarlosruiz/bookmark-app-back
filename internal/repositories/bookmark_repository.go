@@ -34,6 +34,17 @@ func (r *BookmarkRepository) FindByTitleOrURL(title string, url string, userID s
 
 }
 
+func (r *BookmarkRepository) FindByURL(url string, userID string) (*models.Bookmarks, error) {
+	var bookmark models.Bookmarks
+	err := r.db.Where("url = ? AND user_id = ?", url, userID).First(&bookmark).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &bookmark, nil
+}
+
 func (r *BookmarkRepository) Create(bookmark *models.Bookmarks) error {
 	return r.db.Create(bookmark).Error
 }

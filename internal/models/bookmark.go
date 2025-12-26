@@ -12,7 +12,7 @@ type Bookmarks struct {
 	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deletedAt"`
 	Title       string         `gorm:"not null" json:"title"`
-	Url         string         `gorm:"not null;index" json:"url"`
+	Url         string         `gorm:"not null;uniqueIndex:idx_user_url" json:"url"`
 	Favicon     string         `json:"favicon"`
 	Description string         `json:"description"`
 	Pinned      bool           `gorm:"default:false" json:"pinned"`
@@ -22,6 +22,6 @@ type Bookmarks struct {
 	LastVisited *time.Time     `gorm:"default:null" json:"lastVisited"`
 
 	// User relationship
-	UserID string `gorm:"column:user_id;not null;index" json:"userId"`
+	UserID string `gorm:"column:user_id;not null;uniqueIndex:idx_user_url" json:"userId"`
 	User   User   `gorm:"foreignKey:UserID;references:ID" json:"-"`
 }
