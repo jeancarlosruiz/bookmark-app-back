@@ -72,6 +72,18 @@ func (r *BookmarkRepository) FindByUserIDWithTags(userID string) ([]models.Bookm
 	return bookmarks, nil
 }
 
+func (r *BookmarkRepository) FindArchivedByUserIDWithTags(userID string) ([]models.Bookmarks, error) {
+	var bookmarks []models.Bookmarks
+
+	err := r.db.Preload("Tags").Where("user_id = ?", userID).Where("is_archived = ?", true).Order("pinned DESC, updated_at DESC").Find(&bookmarks).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bookmarks, nil
+}
+
 func (r *BookmarkRepository) FindByTags(tags []string, userID string) ([]models.Bookmarks, error) {
 
 	var bookmarks []models.Bookmarks

@@ -26,6 +26,7 @@ func Setup(router *gin.Engine) {
 		protectedGroup.GET("/bookmark/preview", bookmarkCtrl.PreviewMetadata)
 		protectedGroup.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
 		protectedGroup.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
+		protectedGroup.GET("/bookmark/user/:user_id/archived", bookmarkCtrl.GetArchivedBookmarkByUserID)
 		protectedGroup.PUT("/bookmark/update/:id", bookmarkCtrl.UpdateBookmark)
 		protectedGroup.PUT("/bookmark/view-count/:id", bookmarkCtrl.IncrementVisitCountController)
 		protectedGroup.PUT("/bookmark/:id/toggle-pinned", bookmarkCtrl.TogglePinnedByIDController)

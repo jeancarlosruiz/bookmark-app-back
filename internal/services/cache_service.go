@@ -22,6 +22,11 @@ const (
 	// IMPORTANTE: Siempre incluir userId para evitar fugas de datos entre usuarios
 	bookmarkCacheKeyPrefix = "bookmarks:user:"
 
+	// Formato de clave para bookmarks archivados: bookmarks:user:{userId}:archived
+	// Se mantienen separados de los activos para evitar colisiones
+	archivedBookmarkCacheKeyPrefix = "bookmarks:user:"
+	archivedBookmarkCacheKeySuffix = ":archived"
+
 	// TTL recomendado: 10 minutos
 	// - Suficientemente largo para reducir carga en BD
 	// - Suficientemente corto para mantener datos frescos
@@ -109,27 +114,110 @@ func (s *CacheService) SetBookmarksCache(ctx context.Context, userID string, boo
 	return nil
 }
 
-// InvalidateUserCache invalida el caché de bookmarks para un usuario específico
+// === ARCHIVED BOOKMARKS CACHE ===
+
+// GetArchivedBookmarksFromCache intenta obtener bookmarks archivados desde caché
+// Retorna (bookmarks, hit, error)
+// - bookmarks: datos si hay cache hit
+// - hit: true si hubo cache hit, false si cache miss
+// - error: solo si hay error crítico (no es error si la clave no existe)
+func (s *CacheService) GetArchivedBookmarksFromCache(ctx context.Context, userID string) ([]models.Bookmarks, bool, error) {
+	// Si Redis no está disponible, retornar cache miss sin error
+	if !database.IsRedisAvailable() {
+		return nil, false, nil
+	}
+
+	cacheKey := s.buildArchivedCacheKey(userID)
+
+	// Intentar obtener datos del caché
+	data, err := database.RedisClient.Get(ctx, cacheKey).Result()
+
+	// Cache miss: la clave no existe (comportamiento esperado)
+	if err == redis.Nil {
+		log.Printf("Archived cache MISS for user %s", userID)
+		return nil, false, nil
+	}
+
+	// Error de conexión u otro problema crítico
+	if err != nil {
+		log.Printf("Archived cache error for user %s: %v", userID, err)
+		// Retornar cache miss para que la app continúe usando la BD
+		return nil, false, nil
+	}
+
+	// Cache hit: deserializar datos
+	var bookmarks []models.Bookmarks
+	if err := json.Unmarshal([]byte(data), &bookmarks); err != nil {
+		log.Printf("Archived cache deserialization error for user %s: %v", userID, err)
+		// Invalidar caché corrupto
+		database.RedisClient.Del(ctx, cacheKey)
+		return nil, false, nil
+	}
+
+	log.Printf("Archived cache HIT for user %s (%d bookmarks)", userID, len(bookmarks))
+	return bookmarks, true, nil
+}
+
+// SetArchivedBookmarksCache almacena bookmarks archivados en caché para un usuario
+func (s *CacheService) SetArchivedBookmarksCache(ctx context.Context, userID string, bookmarks []models.Bookmarks) error {
+	// Si Redis no está disponible, no hacer nada (la app continúa sin caché)
+	if !database.IsRedisAvailable() {
+		return nil
+	}
+
+	cacheKey := s.buildArchivedCacheKey(userID)
+
+	// Serializar bookmarks a JSON
+	data, err := json.Marshal(bookmarks)
+	if err != nil {
+		log.Printf("Archived cache serialization error for user %s: %v", userID, err)
+		return err
+	}
+
+	// Guardar en caché con TTL
+	err = database.RedisClient.Set(ctx, cacheKey, data, bookmarkCacheTTL).Err()
+	if err != nil {
+		log.Printf("Archived cache write error for user %s: %v", userID, err)
+		return err
+	}
+
+	log.Printf("Archived cache SET for user %s (%d bookmarks, TTL=%v)", userID, len(bookmarks), bookmarkCacheTTL)
+	return nil
+}
+
+// InvalidateUserCache invalida AMBOS cachés de bookmarks para un usuario específico
+// (activos y archivados)
 // CRÍTICO: Llamar esto cuando se crea, actualiza o elimina un bookmark
+// NOTA: Invalida ambos cachés porque un bookmark puede cambiar entre activo/archivado
 func (s *CacheService) InvalidateUserCache(ctx context.Context, userID string) error {
 	// Si Redis no está disponible, no hacer nada
 	if !database.IsRedisAvailable() {
 		return nil
 	}
 
-	cacheKey := s.buildCacheKey(userID)
+	activeCacheKey := s.buildCacheKey(userID)
+	archivedCacheKey := s.buildArchivedCacheKey(userID)
 
-	err := database.RedisClient.Del(ctx, cacheKey).Err()
+	// Invalidar caché de bookmarks activos
+	err := database.RedisClient.Del(ctx, activeCacheKey).Err()
 	if err != nil {
-		log.Printf("Cache invalidation error for user %s: %v", userID, err)
+		log.Printf("Active cache invalidation error for user %s: %v", userID, err)
 		return err
 	}
 
-	log.Printf("Cache INVALIDATED for user %s", userID)
+	// Invalidar caché de bookmarks archivados
+	err = database.RedisClient.Del(ctx, archivedCacheKey).Err()
+	if err != nil {
+		log.Printf("Archived cache invalidation error for user %s: %v", userID, err)
+		return err
+	}
+
+	log.Printf("Cache INVALIDATED for user %s (active & archived)", userID)
 	return nil
 }
 
 // InvalidateAllBookmarkCaches invalida TODOS los cachés de bookmarks
+// (tanto activos como archivados)
 // ADVERTENCIA: Usar solo en casos específicos (ej. migración, mantenimiento)
 // En producción, es mejor invalidar cachés por usuario
 func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
@@ -138,7 +226,8 @@ func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
 		return nil
 	}
 
-	// Buscar todas las claves que coincidan con el patrón
+	// Buscar todas las claves que coincidan con el patrón de bookmarks
+	// Esto incluye tanto activos (bookmarks:user:{id}) como archivados (bookmarks:user:{id}:archived)
 	pattern := bookmarkCacheKeyPrefix + "*"
 	iter := database.RedisClient.Scan(ctx, 0, pattern, 0).Iterator()
 
@@ -157,7 +246,7 @@ func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("Invalidated %d bookmark caches", deletedCount)
+	log.Printf("Invalidated %d bookmark caches (active & archived)", deletedCount)
 	return nil
 }
 
@@ -166,6 +255,13 @@ func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
 // IMPORTANTE: Siempre incluir userId para prevenir fugas de datos
 func (s *CacheService) buildCacheKey(userID string) string {
 	return fmt.Sprintf("%s%s", bookmarkCacheKeyPrefix, userID)
+}
+
+// buildArchivedCacheKey construye la clave de caché para bookmarks archivados de un usuario
+// Formato: bookmarks:user:{userId}:archived
+// IMPORTANTE: Mantener separado del caché de bookmarks activos
+func (s *CacheService) buildArchivedCacheKey(userID string) string {
+	return fmt.Sprintf("%s%s%s", archivedBookmarkCacheKeyPrefix, userID, archivedBookmarkCacheKeySuffix)
 }
 
 // GetCacheStats retorna estadísticas del pool de conexiones de Redis

@@ -130,6 +130,32 @@ func (ctrl *BookmarkController) GetBookmarkByUserID(c *gin.Context) {
 	})
 }
 
+func (ctrl *BookmarkController) GetArchivedBookmarkByUserID(c *gin.Context) {
+	userID := c.Param("user_id")
+
+	bookmarks, err := ctrl.service.FindArchivedByUserIDWithTagService(userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Error al obtener bookmarks para este usuario: " + err.Error(),
+		})
+		return
+	}
+
+	if len(bookmarks) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "No se encontraron bookmarks para este usuario",
+			"data":    bookmarks,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Bookmarks obtenidos exitosamente",
+		"data":    bookmarks,
+	})
+}
+
 // Mejorar
 func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 	query := c.Query("q")

@@ -102,6 +102,34 @@ func (s *BookmarkService) FindByUserIDWithTagService(userID string) ([]models.Bo
 
 }
 
+func (s *BookmarkService) FindArchivedByUserIDWithTagService(userID string) ([]models.Bookmarks, error) {
+	ctx := context.Background()
+
+	// CACHE HIT PATH: Intentar obtener desde caché de ARCHIVADOS
+	cachedBookmarks, hit, err := s.cacheService.GetArchivedBookmarksFromCache(ctx, userID)
+	if hit && err == nil {
+		return cachedBookmarks, nil
+	}
+
+	// CACHE MISS PATH: Consultar base de datos
+	bookmarks, err := s.bookmarkRepo.FindArchivedByUserIDWithTags(userID)
+
+	if err == gorm.ErrRecordNotFound {
+		return nil, ErrBookmarksNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Guardar en caché de ARCHIVADOS para futuras consultas
+	// No retornamos error si el caché falla - la app continúa funcionando
+	_ = s.cacheService.SetArchivedBookmarksCache(ctx, userID, bookmarks)
+
+	return bookmarks, nil
+
+}
+
 func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID string) ([]models.Bookmarks, error) {
 
 	bookmarks, err := s.bookmarkRepo.FindByTags(tags, userID)
