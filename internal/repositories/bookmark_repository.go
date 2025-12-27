@@ -87,7 +87,15 @@ func (r *BookmarkRepository) FindArchivedByUserIDWithTags(userID string) ([]mode
 func (r *BookmarkRepository) FindByTags(tags []string, userID string) ([]models.Bookmarks, error) {
 
 	var bookmarks []models.Bookmarks
-	err := r.db.Model(&models.Bookmarks{}).Preload("Tags").Joins("JOIN bookmark_tags bt ON bt.bookmark_id = bookmarks.id").Joins("JOIN tags t ON t.id = bt.tag_id").Where("LOWER(t.title) IN ?", tags).Where("bookmarks.user_id = ?", userID).Where("bookmarks.is_archived = ?", false).Find(&bookmarks).Error
+	err := r.db.Model(&models.Bookmarks{}).
+		Distinct("bookmarks.*").
+		Preload("Tags").
+		Joins("JOIN bookmark_tags bt ON bt.bookmark_id = bookmarks.id").
+		Joins("JOIN tags t ON t.id = bt.tag_id").
+		Where("LOWER(t.title) IN ?", tags).
+		Where("bookmarks.user_id = ?", userID).
+		Where("bookmarks.is_archived = ?", false).
+		Find(&bookmarks).Error
 
 	if err != nil {
 		return nil, err
