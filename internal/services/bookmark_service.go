@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"sort"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/repositories"
@@ -74,75 +75,135 @@ func (s *BookmarkService) FindByIDWithTagsService(id uint, userID string) (*mode
 
 }
 
-func (s *BookmarkService) FindByUserIDWithTagService(userID string) ([]models.Bookmarks, error) {
+func (s *BookmarkService) FindByUserIDWithTagService(userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
 	ctx := context.Background()
 
 	// CACHE HIT PATH: Intentar obtener desde caché
 	cachedBookmarks, hit, err := s.cacheService.GetBookmarksFromCache(ctx, userID)
 	if hit && err == nil {
-		return cachedBookmarks, nil
+		// Ordenar en memoria según sortParam
+		sortBookmarks(cachedBookmarks, sortParam)
+
+		if pagination != nil {
+			paginatedBookmarks, metadata := PaginateBookmarks(cachedBookmarks, *pagination)
+
+			return paginatedBookmarks, metadata, nil
+		}
+
+		emptyMetadata := models.PaginationMetadata{}
+
+		return cachedBookmarks, emptyMetadata, nil
 	}
 
 	// CACHE MISS PATH: Consultar base de datos
 	bookmarks, err := s.bookmarkRepo.FindByUserIDWithTags(userID)
 
 	if err == gorm.ErrRecordNotFound {
-		return nil, ErrBookmarksNotFound
+		emptyMetadata := models.PaginationMetadata{}
+		return nil, emptyMetadata, ErrBookmarksNotFound
 	}
 
 	if err != nil {
-		return nil, err
+
+		emptyMetadata := models.PaginationMetadata{}
+		return nil, emptyMetadata, err
 	}
 
-	// Guardar en caché para futuras consultas
+	// Guardar en caché SIN ordenar (para reutilizar con diferentes sorts)
 	// No retornamos error si el caché falla - la app continúa funcionando
 	_ = s.cacheService.SetBookmarksCache(ctx, userID, bookmarks)
 
-	return bookmarks, nil
+	// Ordenar en memoria según sortParam antes de retornar
+	sortBookmarks(bookmarks, sortParam)
+
+	if pagination != nil {
+		paginatedBookmarks, metadata := PaginateBookmarks(bookmarks, *pagination)
+
+		return paginatedBookmarks, metadata, nil
+	}
+
+	emptyMetadata := models.PaginationMetadata{}
+	return bookmarks, emptyMetadata, nil
 
 }
 
-func (s *BookmarkService) FindArchivedByUserIDWithTagService(userID string) ([]models.Bookmarks, error) {
+func (s *BookmarkService) FindArchivedByUserIDWithTagService(userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
 	ctx := context.Background()
 
 	// CACHE HIT PATH: Intentar obtener desde caché de ARCHIVADOS
 	cachedBookmarks, hit, err := s.cacheService.GetArchivedBookmarksFromCache(ctx, userID)
 	if hit && err == nil {
-		return cachedBookmarks, nil
+		// Ordenar en memoria según sortParam
+		sortBookmarks(cachedBookmarks, sortParam)
+
+		if pagination != nil {
+			paginatedBookmarks, metadata := PaginateBookmarks(cachedBookmarks, *pagination)
+
+			return paginatedBookmarks, metadata, nil
+		}
+
+		emptyMetadata := models.PaginationMetadata{}
+
+		return cachedBookmarks, emptyMetadata, nil
 	}
 
 	// CACHE MISS PATH: Consultar base de datos
 	bookmarks, err := s.bookmarkRepo.FindArchivedByUserIDWithTags(userID)
 
 	if err == gorm.ErrRecordNotFound {
-		return nil, ErrBookmarksNotFound
+
+		emptyMetadata := models.PaginationMetadata{}
+		return nil, emptyMetadata, ErrBookmarksNotFound
 	}
 
 	if err != nil {
-		return nil, err
+
+		emptyMetadata := models.PaginationMetadata{}
+		return nil, emptyMetadata, err
 	}
 
-	// Guardar en caché de ARCHIVADOS para futuras consultas
+	// Guardar en caché de ARCHIVADOS SIN ordenar (para reutilizar con diferentes sorts)
 	// No retornamos error si el caché falla - la app continúa funcionando
 	_ = s.cacheService.SetArchivedBookmarksCache(ctx, userID, bookmarks)
 
-	return bookmarks, nil
+	// Ordenar en memoria según sortParam antes de retornar
+	sortBookmarks(bookmarks, sortParam)
+
+	if pagination != nil {
+		paginatedBookmarks, metadata := PaginateBookmarks(cachedBookmarks, *pagination)
+
+		return paginatedBookmarks, metadata, nil
+	}
+
+	emptyMetadata := models.PaginationMetadata{}
+	return bookmarks, emptyMetadata, nil
 
 }
 
-func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID string) ([]models.Bookmarks, error) {
+func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
 
+	emptyMetadata := models.PaginationMetadata{}
 	bookmarks, err := s.bookmarkRepo.FindByTags(tags, userID)
 
 	if err == gorm.ErrRecordNotFound {
-		return nil, ErrBookmarksNotFound
+		return nil, emptyMetadata, ErrBookmarksNotFound
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, emptyMetadata, err
 	}
 
-	return bookmarks, nil
+	// Ordenar en memoria según sortParam antes de retornar
+	// Las búsquedas por tags NO se cachean (queries dinámicas)
+	sortBookmarks(bookmarks, sortParam)
+
+	if pagination != nil {
+		paginatedBookmarks, metadata := PaginateBookmarks(bookmarks, *pagination)
+
+		return paginatedBookmarks, metadata, nil
+	}
+
+	return bookmarks, emptyMetadata, nil
 }
 
 func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string) ([]models.Bookmarks, error) {
@@ -283,6 +344,72 @@ func (s *BookmarkService) CheckURLExists(url string, userID string) error {
 
 	// Otro tipo de error de base de datos
 	return err
+}
+
+// sortBookmarks ordena un slice de bookmarks en memoria según el parámetro sort
+// Valores aceptados: "created" (más reciente primero), "visited" (último visitado primero), "count" (más visitado primero)
+// Si sortParam está vacío o es inválido, no se aplica ningún ordenamiento
+func sortBookmarks(bookmarks []models.Bookmarks, sortParam string) {
+	switch sortParam {
+	case "created":
+		// Ordenar por CreatedAt descendente (más reciente primero)
+		sort.Slice(bookmarks, func(i, j int) bool {
+			return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
+		})
+	case "visited":
+		// Ordenar por LastVisited descendente (último visitado primero)
+		// Los bookmarks sin visitar (LastVisited == nil) van al final
+		sort.Slice(bookmarks, func(i, j int) bool {
+			// Si ambos tienen LastVisited, comparar las fechas
+			if bookmarks[i].LastVisited != nil && bookmarks[j].LastVisited != nil {
+				return bookmarks[i].LastVisited.After(*bookmarks[j].LastVisited)
+			}
+			// Si solo i tiene LastVisited, va primero
+			if bookmarks[i].LastVisited != nil {
+				return true
+			}
+			// Si solo j tiene LastVisited, va primero
+			if bookmarks[j].LastVisited != nil {
+				return false
+			}
+			// Si ninguno tiene LastVisited, mantener orden original (por CreatedAt)
+			return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
+		})
+	case "count":
+		// Ordenar por VisitCount descendente (más visitado primero)
+		sort.Slice(bookmarks, func(i, j int) bool {
+			// Si tienen el mismo count, ordenar por CreatedAt
+			if bookmarks[i].VisitCount == bookmarks[j].VisitCount {
+				return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
+			}
+			return bookmarks[i].VisitCount > bookmarks[j].VisitCount
+		})
+	default:
+		// No aplicar ordenamiento si sortParam es vacío o inválido
+		// Los bookmarks mantienen el orden de la BD (por defecto CreatedAt desc)
+		return
+	}
+}
+
+func PaginateBookmarks(bookmarks []models.Bookmarks, params models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata) {
+	total := len(bookmarks)
+
+	metadata := params.CalculateMetadata(total)
+
+	if total == 0 {
+		return []models.Bookmarks{}, metadata
+	}
+
+	offset := params.GetOffset()
+	end := params.GetEndIndex(total)
+
+	if offset >= total {
+		return []models.Bookmarks{}, metadata
+	}
+
+	paginatedBookmarks := bookmarks[offset:end]
+
+	return paginatedBookmarks, metadata
 }
 
 var (

@@ -106,8 +106,19 @@ func (ctrl *BookmarkController) GetBookmarkByID(c *gin.Context) {
 
 func (ctrl *BookmarkController) GetBookmarkByUserID(c *gin.Context) {
 	userID := c.Param("user_id")
+	// Leer el parámetro sort del query string (ej: ?sort=created, ?sort=visited, ?sort=count)
+	sortParam := c.DefaultQuery("sort", "")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
 
-	bookmarks, err := ctrl.service.FindByUserIDWithTagService(userID)
+	var pagination *models.PaginationParams
+
+	if page > 0 || limit > 0 {
+		params := models.NewPaginationParams(page, limit)
+		pagination = &params
+	}
+
+	bookmarks, paginationMeta, err := ctrl.service.FindByUserIDWithTagService(userID, sortParam, pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -117,23 +128,39 @@ func (ctrl *BookmarkController) GetBookmarkByUserID(c *gin.Context) {
 	}
 
 	if len(bookmarks) == 0 {
+
 		c.JSON(http.StatusOK, gin.H{
-			"message": "No se encontraron bookmarks para este usuario",
-			"data":    bookmarks,
+			"message":    "No se encontraron bookmarks para este usuario",
+			"data":       bookmarks,
+			"pagination": paginationMeta,
 		})
+
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Bookmarks obtenidos exitosamente",
-		"data":    bookmarks,
+		"message":    "Bookmarks obtenidos exitosamente",
+		"data":       bookmarks,
+		"pagination": paginationMeta,
 	})
 }
 
 func (ctrl *BookmarkController) GetArchivedBookmarkByUserID(c *gin.Context) {
 	userID := c.Param("user_id")
+	// Leer el parámetro sort del query string (ej: ?sort=created, ?sort=visited, ?sort=count)
+	sortParam := c.DefaultQuery("sort", "")
 
-	bookmarks, err := ctrl.service.FindArchivedByUserIDWithTagService(userID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+
+	var pagination *models.PaginationParams
+
+	if page > 0 || limit > 0 {
+		params := models.NewPaginationParams(page, limit)
+		pagination = &params
+	}
+
+	bookmarks, paginationMeta, err := ctrl.service.FindArchivedByUserIDWithTagService(userID, sortParam, pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -144,15 +171,17 @@ func (ctrl *BookmarkController) GetArchivedBookmarkByUserID(c *gin.Context) {
 
 	if len(bookmarks) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "No se encontraron bookmarks para este usuario",
-			"data":    bookmarks,
+			"message":    "No se encontraron bookmarks para este usuario",
+			"data":       bookmarks,
+			"pagination": paginationMeta,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Bookmarks obtenidos exitosamente",
-		"data":    bookmarks,
+		"message":    "Bookmarks obtenidos exitosamente",
+		"data":       bookmarks,
+		"pagination": paginationMeta,
 	})
 }
 
@@ -160,6 +189,18 @@ func (ctrl *BookmarkController) GetArchivedBookmarkByUserID(c *gin.Context) {
 func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 	query := c.Query("q")
 	userID := c.GetString("user_id")
+	// Leer el parámetro sort del query string (ej: ?q=tag1,tag2&sort=created)
+	sortParam := c.DefaultQuery("sort", "")
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+
+	var pagination *models.PaginationParams
+
+	if page > 0 || limit > 0 {
+		params := models.NewPaginationParams(page, limit)
+		pagination = &params
+	}
 
 	var tagList = strings.Split(query, ",")
 
@@ -177,7 +218,7 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 
 	}
 
-	bookmarks, err := ctrl.service.FindBookmarksByTagsService(searchList, userID)
+	bookmarks, paginationMetadata, err := ctrl.service.FindBookmarksByTagsService(searchList, userID, sortParam, pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -190,16 +231,18 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 
 	if len(bookmarks) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "No bookmarks encontrados",
-			"data":    []models.Bookmarks{},
+			"message":    "No bookmarks encontrados",
+			"data":       []models.Bookmarks{},
+			"pagination": paginationMetadata,
 		})
 
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Bookmark encontrados satifactoriamente",
-		"data":    bookmarks,
+		"message":    "Bookmark encontrados satifactoriamente",
+		"data":       bookmarks,
+		"pagination": paginationMetadata,
 	})
 
 }
