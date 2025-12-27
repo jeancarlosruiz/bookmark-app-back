@@ -43,6 +43,16 @@ const (
 	// - Protege contra rate limiting
 	// - Mejora UX con respuestas instantáneas
 	metadataCacheTTL = 24 * time.Hour
+
+	// Formato de clave para tags: tags:user:{userId}
+	// Similar a bookmarks, incluir userId para aislamiento
+	tagsCacheKeyPrefix = "tags:user:"
+
+	// TTL recomendado para tags: 15 minutos
+	// - Los tags cambian poco (solo cuando se crean/modifican bookmarks)
+	// - Query compleja (JOIN + GROUP BY + COUNT)
+	// - Alta tasa de lectura vs escritura
+	tagsCacheTTL = 15 * time.Minute
 )
 
 // GetBookmarksFromCache intenta obtener bookmarks desde caché
@@ -185,10 +195,12 @@ func (s *CacheService) SetArchivedBookmarksCache(ctx context.Context, userID str
 	return nil
 }
 
-// InvalidateUserCache invalida AMBOS cachés de bookmarks para un usuario específico
-// (activos y archivados)
+// InvalidateUserCache invalida TODOS los cachés relacionados con bookmarks para un usuario
+// (bookmarks activos, archivados y tags)
 // CRÍTICO: Llamar esto cuando se crea, actualiza o elimina un bookmark
-// NOTA: Invalida ambos cachés porque un bookmark puede cambiar entre activo/archivado
+// NOTA: Invalida todos los cachés porque:
+// - Un bookmark puede cambiar entre activo/archivado
+// - Los tags se ven afectados (conteo de bookmarks por tag)
 func (s *CacheService) InvalidateUserCache(ctx context.Context, userID string) error {
 	// Si Redis no está disponible, no hacer nada
 	if !database.IsRedisAvailable() {
@@ -197,6 +209,7 @@ func (s *CacheService) InvalidateUserCache(ctx context.Context, userID string) e
 
 	activeCacheKey := s.buildCacheKey(userID)
 	archivedCacheKey := s.buildArchivedCacheKey(userID)
+	tagsCacheKey := s.buildTagsCacheKey(userID)
 
 	// Invalidar caché de bookmarks activos
 	err := database.RedisClient.Del(ctx, activeCacheKey).Err()
@@ -212,12 +225,19 @@ func (s *CacheService) InvalidateUserCache(ctx context.Context, userID string) e
 		return err
 	}
 
-	log.Printf("Cache INVALIDATED for user %s (active & archived)", userID)
+	// Invalidar caché de tags
+	err = database.RedisClient.Del(ctx, tagsCacheKey).Err()
+	if err != nil {
+		log.Printf("Tags cache invalidation error for user %s: %v", userID, err)
+		return err
+	}
+
+	log.Printf("Cache INVALIDATED for user %s (active, archived & tags)", userID)
 	return nil
 }
 
-// InvalidateAllBookmarkCaches invalida TODOS los cachés de bookmarks
-// (tanto activos como archivados)
+// InvalidateAllBookmarkCaches invalida TODOS los cachés de bookmarks y tags
+// (activos, archivados y tags)
 // ADVERTENCIA: Usar solo en casos específicos (ej. migración, mantenimiento)
 // En producción, es mejor invalidar cachés por usuario
 func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
@@ -226,14 +246,15 @@ func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
 		return nil
 	}
 
-	// Buscar todas las claves que coincidan con el patrón de bookmarks
-	// Esto incluye tanto activos (bookmarks:user:{id}) como archivados (bookmarks:user:{id}:archived)
-	pattern := bookmarkCacheKeyPrefix + "*"
-	iter := database.RedisClient.Scan(ctx, 0, pattern, 0).Iterator()
-
 	deletedCount := 0
-	for iter.Next(ctx) {
-		key := iter.Val()
+
+	// 1. Invalidar todos los cachés de bookmarks (activos y archivados)
+	// Patrón: bookmarks:user:*
+	bookmarkPattern := bookmarkCacheKeyPrefix + "*"
+	bookmarkIter := database.RedisClient.Scan(ctx, 0, bookmarkPattern, 0).Iterator()
+
+	for bookmarkIter.Next(ctx) {
+		key := bookmarkIter.Val()
 		if err := database.RedisClient.Del(ctx, key).Err(); err != nil {
 			log.Printf("Error deleting cache key %s: %v", key, err)
 		} else {
@@ -241,12 +262,31 @@ func (s *CacheService) InvalidateAllBookmarkCaches(ctx context.Context) error {
 		}
 	}
 
-	if err := iter.Err(); err != nil {
-		log.Printf("Error scanning cache keys: %v", err)
+	if err := bookmarkIter.Err(); err != nil {
+		log.Printf("Error scanning bookmark cache keys: %v", err)
 		return err
 	}
 
-	log.Printf("Invalidated %d bookmark caches (active & archived)", deletedCount)
+	// 2. Invalidar todos los cachés de tags
+	// Patrón: tags:user:*
+	tagsPattern := tagsCacheKeyPrefix + "*"
+	tagsIter := database.RedisClient.Scan(ctx, 0, tagsPattern, 0).Iterator()
+
+	for tagsIter.Next(ctx) {
+		key := tagsIter.Val()
+		if err := database.RedisClient.Del(ctx, key).Err(); err != nil {
+			log.Printf("Error deleting cache key %s: %v", key, err)
+		} else {
+			deletedCount++
+		}
+	}
+
+	if err := tagsIter.Err(); err != nil {
+		log.Printf("Error scanning tags cache keys: %v", err)
+		return err
+	}
+
+	log.Printf("Invalidated %d caches (bookmarks & tags)", deletedCount)
 	return nil
 }
 
@@ -363,4 +403,102 @@ func (s *CacheService) buildMetadataCacheKey(url string) string {
 	hash := sha256.Sum256([]byte(url))
 	hashStr := hex.EncodeToString(hash[:])
 	return fmt.Sprintf("%s%s", metadataCacheKeyPrefix, hashStr)
+}
+
+// === TAGS CACHING ===
+
+// GetTagsFromCache intenta obtener tags desde caché
+// Retorna (tags, hit, error)
+// - tags: datos si hay cache hit
+// - hit: true si hubo cache hit, false si cache miss
+// - error: solo si hay error crítico (no es error si la clave no existe)
+func (s *CacheService) GetTagsFromCache(ctx context.Context, userID string) ([]models.TagWithCount, bool, error) {
+	// Si Redis no está disponible, retornar cache miss sin error
+	if !database.IsRedisAvailable() {
+		return nil, false, nil
+	}
+
+	cacheKey := s.buildTagsCacheKey(userID)
+
+	// Intentar obtener datos del caché
+	data, err := database.RedisClient.Get(ctx, cacheKey).Result()
+
+	// Cache miss: la clave no existe (comportamiento esperado)
+	if err == redis.Nil {
+		log.Printf("Tags cache MISS for user %s", userID)
+		return nil, false, nil
+	}
+
+	// Error de conexión u otro problema crítico
+	if err != nil {
+		log.Printf("Tags cache error for user %s: %v", userID, err)
+		// Retornar cache miss para que la app continúe usando la BD
+		return nil, false, nil
+	}
+
+	// Cache hit: deserializar datos
+	var tags []models.TagWithCount
+	if err := json.Unmarshal([]byte(data), &tags); err != nil {
+		log.Printf("Tags cache deserialization error for user %s: %v", userID, err)
+		// Invalidar caché corrupto
+		database.RedisClient.Del(ctx, cacheKey)
+		return nil, false, nil
+	}
+
+	log.Printf("Tags cache HIT for user %s (%d tags)", userID, len(tags))
+	return tags, true, nil
+}
+
+// SetTagsCache almacena tags en caché para un usuario
+func (s *CacheService) SetTagsCache(ctx context.Context, userID string, tags []models.TagWithCount) error {
+	// Si Redis no está disponible, no hacer nada (la app continúa sin caché)
+	if !database.IsRedisAvailable() {
+		return nil
+	}
+
+	cacheKey := s.buildTagsCacheKey(userID)
+
+	// Serializar tags a JSON
+	data, err := json.Marshal(tags)
+	if err != nil {
+		log.Printf("Tags cache serialization error for user %s: %v", userID, err)
+		return err
+	}
+
+	// Guardar en caché con TTL
+	err = database.RedisClient.Set(ctx, cacheKey, data, tagsCacheTTL).Err()
+	if err != nil {
+		log.Printf("Tags cache write error for user %s: %v", userID, err)
+		return err
+	}
+
+	log.Printf("Tags cache SET for user %s (%d tags, TTL=%v)", userID, len(tags), tagsCacheTTL)
+	return nil
+}
+
+// InvalidateTagsCache invalida el caché de tags para un usuario específico
+// CRÍTICO: Llamar esto cuando se crean, actualizan o eliminan bookmarks con tags
+func (s *CacheService) InvalidateTagsCache(ctx context.Context, userID string) error {
+	// Si Redis no está disponible, no hacer nada
+	if !database.IsRedisAvailable() {
+		return nil
+	}
+
+	cacheKey := s.buildTagsCacheKey(userID)
+
+	err := database.RedisClient.Del(ctx, cacheKey).Err()
+	if err != nil {
+		log.Printf("Tags cache invalidation error for user %s: %v", userID, err)
+		return err
+	}
+
+	log.Printf("Tags cache INVALIDATED for user %s", userID)
+	return nil
+}
+
+// buildTagsCacheKey construye la clave de caché para tags de un usuario
+// Formato: tags:user:{userId}
+// IMPORTANTE: Siempre incluir userId para prevenir fugas de datos
+func (s *CacheService) buildTagsCacheKey(userID string) string {
+	return fmt.Sprintf("%s%s", tagsCacheKeyPrefix, userID)
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"strings"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
@@ -9,22 +10,36 @@ import (
 )
 
 type TagService struct {
-	repo *repositories.TagRepository
+	repo         *repositories.TagRepository
+	cacheService *CacheService
 }
 
 func NewTagService() *TagService {
 	return &TagService{
-		repo: repositories.NewTagRepository(),
+		repo:         repositories.NewTagRepository(),
+		cacheService: &CacheService{},
 	}
 }
 
 func (s *TagService) FindByUserIDService(userId string) ([]models.TagWithCount, error) {
+	ctx := context.Background()
 
+	// CACHE HIT PATH: Intentar obtener desde caché
+	cachedTags, hit, err := s.cacheService.GetTagsFromCache(ctx, userId)
+	if hit && err == nil {
+		return cachedTags, nil
+	}
+
+	// CACHE MISS PATH: Consultar base de datos
 	tags, err := s.repo.FindByUserIDWithCount(userId)
 
 	if err != nil {
 		return nil, err
 	}
+
+	// Guardar en caché para futuras consultas
+	// No retornamos error si el caché falla - la app continúa funcionando
+	_ = s.cacheService.SetTagsCache(ctx, userId, tags)
 
 	return tags, nil
 }
