@@ -346,21 +346,26 @@ func (s *BookmarkService) CheckURLExists(url string, userID string) error {
 	return err
 }
 
-// sortBookmarks ordena un slice de bookmarks en memoria según el parámetro sort
-// Valores aceptados: "created" (más reciente primero), "visited" (último visitado primero), "count" (más visitado primero)
-// Si sortParam está vacío o es inválido, no se aplica ningún ordenamiento
+// sortBookmarks ordena un slice de bookmarks en memoria con prioridad a pinned
+// PRIORIDAD: Los bookmarks con pinned=true SIEMPRE van primero
+// Valores de sortParam aceptados: "created" (más reciente primero), "visited" (último visitado primero), "count" (más visitado primero)
+// Si sortParam está vacío o es inválido, se ordena por CreatedAt descendente (por defecto)
 func sortBookmarks(bookmarks []models.Bookmarks, sortParam string) {
-	switch sortParam {
-	case "created":
-		// Ordenar por CreatedAt descendente (más reciente primero)
-		sort.Slice(bookmarks, func(i, j int) bool {
+	sort.Slice(bookmarks, func(i, j int) bool {
+		// PRIORIDAD 1: Pinned siempre va primero
+		if bookmarks[i].Pinned != bookmarks[j].Pinned {
+			return bookmarks[i].Pinned // true > false
+		}
+
+		// PRIORIDAD 2: Aplicar ordenamiento según sortParam (dentro del mismo grupo de pinned)
+		switch sortParam {
+		case "created":
+			// Ordenar por CreatedAt descendente (más reciente primero)
 			return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
-		})
-	case "visited":
-		// Ordenar por LastVisited descendente (último visitado primero)
-		// Los bookmarks sin visitar (LastVisited == nil) van al final
-		sort.Slice(bookmarks, func(i, j int) bool {
-			// Si ambos tienen LastVisited, comparar las fechas
+
+		case "visited":
+			// Ordenar por LastVisited descendente (último visitado primero)
+			// Los bookmarks sin visitar (LastVisited == nil) van al final
 			if bookmarks[i].LastVisited != nil && bookmarks[j].LastVisited != nil {
 				return bookmarks[i].LastVisited.After(*bookmarks[j].LastVisited)
 			}
@@ -372,23 +377,21 @@ func sortBookmarks(bookmarks []models.Bookmarks, sortParam string) {
 			if bookmarks[j].LastVisited != nil {
 				return false
 			}
-			// Si ninguno tiene LastVisited, mantener orden original (por CreatedAt)
+			// Si ninguno tiene LastVisited, ordenar por CreatedAt
 			return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
-		})
-	case "count":
-		// Ordenar por VisitCount descendente (más visitado primero)
-		sort.Slice(bookmarks, func(i, j int) bool {
-			// Si tienen el mismo count, ordenar por CreatedAt
+
+		case "count":
+			// Ordenar por VisitCount descendente (más visitado primero)
 			if bookmarks[i].VisitCount == bookmarks[j].VisitCount {
 				return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
 			}
 			return bookmarks[i].VisitCount > bookmarks[j].VisitCount
-		})
-	default:
-		// No aplicar ordenamiento si sortParam es vacío o inválido
-		// Los bookmarks mantienen el orden de la BD (por defecto CreatedAt desc)
-		return
-	}
+
+		default:
+			// Por defecto: ordenar por CreatedAt descendente
+			return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
+		}
+	})
 }
 
 func PaginateBookmarks(bookmarks []models.Bookmarks, params models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata) {
