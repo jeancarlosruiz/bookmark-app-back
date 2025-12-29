@@ -186,7 +186,10 @@ func (r *BookmarkRepository) TogglePinnedByID(id uint, userID string) (*models.B
 
 func (r *BookmarkRepository) ToggleIsArchiveByID(id uint, userID string) (*models.Bookmarks, error) {
 
-	err := r.db.Model(&models.Bookmarks{}).Where("id = ? AND user_id = ?", id, userID).Update("is_archived", gorm.Expr("NOT is_archived")).Error
+	err := r.db.Model(&models.Bookmarks{}).Where("id = ? AND user_id = ?", id, userID).Updates(map[string]interface{}{
+		"is_archived": gorm.Expr("NOT is_archived"),
+		"pinned":      false,
+	}).Error
 
 	if err != nil {
 

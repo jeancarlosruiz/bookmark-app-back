@@ -242,6 +242,10 @@ func (s *BookmarkService) IncrementVisitCountService(id uint, userID string) (*m
 		return nil, err
 	}
 
+	// INVALIDACIÓN DE CACHÉ: Crucial después de cambiar el estado de un bookmark
+	ctx := context.Background()
+	_ = s.cacheService.InvalidateUserCache(ctx, userID)
+
 	return bookmark, nil
 }
 
