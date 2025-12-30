@@ -248,8 +248,7 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 }
 
 func (ctrl *BookmarkController) SearchBookmarkByTitle(c *gin.Context) {
-	bookmarkTitle := c.Query("q")
-	// Aqui deberia ir tambien el UserID
+	bookmarkTitle := c.Query("search")
 	userID := c.GetString("user_id")
 
 	bookmarks, err := ctrl.service.FindBookmarkByTitleService(bookmarkTitle, userID)
