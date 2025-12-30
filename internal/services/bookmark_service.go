@@ -40,10 +40,12 @@ func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (
 	}
 
 	bookmark := &models.Bookmarks{
-		Title:  data.Title,
-		Url:    data.Url,
-		UserID: data.UserID,
-		Tags:   tags,
+		Title:       data.Title,
+		Url:         data.Url,
+		Description: data.Description,
+		UserID:      data.UserID,
+		Favicon:     data.Favicon,
+		Tags:        tags,
 	}
 
 	if err := s.bookmarkRepo.Create(bookmark); err != nil {
