@@ -250,8 +250,19 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 func (ctrl *BookmarkController) SearchBookmarkByTitle(c *gin.Context) {
 	bookmarkTitle := c.Query("search")
 	userID := c.GetString("user_id")
+	sortParam := c.DefaultQuery("sort", "")
 
-	bookmarks, err := ctrl.service.FindBookmarkByTitleService(bookmarkTitle, userID)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+
+	var pagination *models.PaginationParams
+
+	if page > 0 || limit > 0 {
+		params := models.NewPaginationParams(page, limit)
+		pagination = &params
+	}
+
+	bookmarks, paginationMetadata, err := ctrl.service.FindBookmarkByTitleService(bookmarkTitle, userID, sortParam, pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -264,16 +275,18 @@ func (ctrl *BookmarkController) SearchBookmarkByTitle(c *gin.Context) {
 
 	if len(bookmarks) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "No se encontro bookmark con este title: " + bookmarkTitle,
-			"data":    []models.Bookmarks{},
+			"message":    "No se encontro bookmark con este title: " + bookmarkTitle,
+			"data":       []models.Bookmarks{},
+			"pagination": paginationMetadata,
 		})
 
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Bookmark encontrados satifactoriamente",
-		"data":    bookmarks,
+		"message":    "Bookmark encontrados satifactoriamente",
+		"data":       bookmarks,
+		"pagination": paginationMetadata,
 	})
 }
 

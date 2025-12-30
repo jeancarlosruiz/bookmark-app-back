@@ -206,19 +206,30 @@ func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID strin
 	return bookmarks, emptyMetadata, nil
 }
 
-func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string) ([]models.Bookmarks, error) {
+func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
 
+	emptyMetadata := models.PaginationMetadata{}
 	bookmarks, err := s.bookmarkRepo.FindBookmarkByTitle(title, userID)
 
 	if err == gorm.ErrRecordNotFound {
-		return nil, ErrBookmarksNotFound
+		return nil, emptyMetadata, ErrBookmarksNotFound
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, emptyMetadata, err
 	}
 
-	return bookmarks, nil
+	// Ordenar en memoria según sortParam antes de retornar
+	// Las búsquedas por título NO se cachean (queries dinámicas)
+	sortBookmarks(bookmarks, sortParam)
+
+	if pagination != nil {
+		paginatedBookmarks, metadata := PaginateBookmarks(bookmarks, *pagination)
+
+		return paginatedBookmarks, metadata, nil
+	}
+
+	return bookmarks, emptyMetadata, nil
 }
 
 func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint, userID string) (*models.Bookmarks, error) {
