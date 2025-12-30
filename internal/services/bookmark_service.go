@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/repositories"
@@ -207,9 +208,29 @@ func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID strin
 }
 
 func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
-
+	ctx := context.Background()
 	emptyMetadata := models.PaginationMetadata{}
-	bookmarks, err := s.bookmarkRepo.FindBookmarkByTitle(title, userID)
+
+	// CACHE HIT PATH: Intentar obtener desde caché
+	cachedBookmarks, hit, err := s.cacheService.GetBookmarksFromCache(ctx, userID)
+	if hit && err == nil {
+		// Filtrar por título en memoria (case-insensitive, como ILIKE '%title%')
+		filtered := filterByTitle(cachedBookmarks, title)
+
+		// Ordenar en memoria según sortParam
+		sortBookmarks(filtered, sortParam)
+
+		if pagination != nil {
+			paginatedBookmarks, metadata := PaginateBookmarks(filtered, *pagination)
+			return paginatedBookmarks, metadata, nil
+		}
+
+		return filtered, emptyMetadata, nil
+	}
+
+	// CACHE MISS PATH: Cargar TODOS los bookmarks del usuario desde DB
+	// y cachearlos para futuras búsquedas
+	allBookmarks, err := s.bookmarkRepo.FindByUserIDWithTags(userID)
 
 	if err == gorm.ErrRecordNotFound {
 		return nil, emptyMetadata, ErrBookmarksNotFound
@@ -219,17 +240,22 @@ func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string
 		return nil, emptyMetadata, err
 	}
 
+	// Guardar TODOS los bookmarks en caché para reutilizar en futuras búsquedas
+	// No retornamos error si el caché falla - la app continúa funcionando
+	_ = s.cacheService.SetBookmarksCache(ctx, userID, allBookmarks)
+
+	// Filtrar por título en memoria
+	filtered := filterByTitle(allBookmarks, title)
+
 	// Ordenar en memoria según sortParam antes de retornar
-	// Las búsquedas por título NO se cachean (queries dinámicas)
-	sortBookmarks(bookmarks, sortParam)
+	sortBookmarks(filtered, sortParam)
 
 	if pagination != nil {
-		paginatedBookmarks, metadata := PaginateBookmarks(bookmarks, *pagination)
-
+		paginatedBookmarks, metadata := PaginateBookmarks(filtered, *pagination)
 		return paginatedBookmarks, metadata, nil
 	}
 
-	return bookmarks, emptyMetadata, nil
+	return filtered, emptyMetadata, nil
 }
 
 func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint, userID string) (*models.Bookmarks, error) {
@@ -407,6 +433,28 @@ func sortBookmarks(bookmarks []models.Bookmarks, sortParam string) {
 			return bookmarks[i].CreatedAt.After(bookmarks[j].CreatedAt)
 		}
 	})
+}
+
+// filterByTitle filtra bookmarks por título usando búsqueda case-insensitive
+// Implementa la misma lógica que el ILIKE '%title%' de PostgreSQL
+func filterByTitle(bookmarks []models.Bookmarks, title string) []models.Bookmarks {
+	// Si no hay término de búsqueda, retornar todos
+	if title == "" {
+		return bookmarks
+	}
+
+	// Convertir el término de búsqueda a minúsculas
+	searchTerm := strings.ToLower(title)
+	filtered := make([]models.Bookmarks, 0)
+
+	// Filtrar bookmarks que contengan el término en el título
+	for _, bookmark := range bookmarks {
+		if strings.Contains(strings.ToLower(bookmark.Title), searchTerm) {
+			filtered = append(filtered, bookmark)
+		}
+	}
+
+	return filtered
 }
 
 func PaginateBookmarks(bookmarks []models.Bookmarks, params models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata) {
