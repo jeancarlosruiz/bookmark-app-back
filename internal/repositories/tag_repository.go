@@ -33,8 +33,9 @@ func (r *TagRepository) FindByUserIDWithCount(userID string) ([]models.TagWithCo
 	var tagsWithCount []models.TagWithCount
 
 	err := r.db.Model(&models.Tag{}).
-		Select("tags.*, COUNT(bookmark_tags.bookmark_id) as total_bookmarks").
+		Select("tags.*, COUNT(bookmarks.id) as total_bookmarks").
 		Joins("LEFT JOIN bookmark_tags ON bookmark_tags.tag_id = tags.id").
+		Joins("LEFT JOIN bookmarks ON bookmarks.id = bookmark_tags.bookmark_id AND bookmarks.deleted_at IS NULL").
 		Where("tags.user_id = ?", userID).
 		Group("tags.id").
 		Order("tags.title ASC").
