@@ -52,7 +52,7 @@ func (r *TagRepository) FindByTitleAndUserID(title string, userID string) (*mode
 
 	var tag models.Tag
 
-	err := r.db.Where(&models.Tag{Title: title, UserID: userID}).First(&tag).Error
+	err := r.db.Model(models.Tag{}).Where("title ILIKE ? AND user_id = ?", title, userID).First(&tag).Error
 
 	if err != nil {
 		return nil, err
