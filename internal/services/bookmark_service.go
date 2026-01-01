@@ -341,13 +341,11 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 	}
 
 	if data.Tags != nil {
-		_, err := s.tagService.FindOrCreateTags(data.Tags, userID)
+		err := s.UpdateBookmarkTags(id, userID, data.Tags)
 
 		if err != nil {
 			return nil, err
 		}
-
-		// Hacer el replacement de tags
 
 	}
 
@@ -459,6 +457,58 @@ func filterByTitle(bookmarks []models.Bookmarks, title string) []models.Bookmark
 	return filtered
 }
 
+func (s *BookmarkService) UpdateBookmarkTags(bookmarkID uint, userID string, tagNames []string) error {
+	bookmark, err := s.bookmarkRepo.FindByIDWithTags(bookmarkID, userID)
+
+	if err != nil {
+		return err
+	}
+
+	tagIDs, err := s.bookmarkRepo.GetTagsId(bookmark.ID)
+
+	if err != nil {
+		return err
+	}
+
+	tags, err := s.tagService.FindOrCreateTags(tagNames, userID)
+
+	if err != nil {
+		return err
+	}
+
+	var currentTagIDs []uint
+
+	for _, tag := range tags {
+		currentTagIDs = append(currentTagIDs, tag.ID)
+	}
+
+	toRemove, toAdd := calculateTagDifferences(tagIDs, currentTagIDs)
+
+	if len(toRemove) > 0 {
+
+		err := s.bookmarkRepo.RemoveTagAssociations(bookmarkID, toRemove)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(toAdd) > 0 {
+		err := s.bookmarkRepo.AddTagAssociations(bookmarkID, toAdd)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	ctx := context.Background()
+
+	_ = s.cacheService.InvalidateUserCache(ctx, userID)
+
+	return nil
+
+}
+
 func PaginateBookmarks(bookmarks []models.Bookmarks, params models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata) {
 	total := len(bookmarks)
 
@@ -478,6 +528,34 @@ func PaginateBookmarks(bookmarks []models.Bookmarks, params models.PaginationPar
 	paginatedBookmarks := bookmarks[offset:end]
 
 	return paginatedBookmarks, metadata
+}
+
+func calculateTagDifferences(currentIDs, newIDs []uint) (toRemove, toAdd []uint) {
+	currentSet := make(map[uint]struct{}, len(currentIDs))
+
+	for _, id := range currentIDs {
+		currentSet[id] = struct{}{}
+	}
+
+	newSet := make(map[uint]struct{}, len(newIDs))
+
+	for _, id := range newIDs {
+		newSet[id] = struct{}{}
+	}
+
+	for _, id := range currentIDs {
+		if _, exists := newSet[id]; !exists {
+			toRemove = append(toRemove, id)
+		}
+	}
+
+	for _, id := range newIDs {
+		if _, exists := currentSet[id]; !exists {
+			toAdd = append(toAdd, id)
+		}
+	}
+
+	return
 }
 
 var (

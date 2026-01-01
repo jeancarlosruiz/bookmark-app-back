@@ -204,3 +204,89 @@ func (r *BookmarkRepository) ToggleIsArchiveByID(id uint, userID string) (*model
 
 	return bookmark, nil
 }
+
+func (r *BookmarkRepository) GetTagsId(bookmarkID uint) ([]uint, error) {
+	var bookmarkTags []models.BookmarkTag
+	err := r.db.Model(&models.BookmarkTag{}).Where("bookmark_id = ?", bookmarkID).Find(&bookmarkTags).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	var tagsId []uint
+
+	for _, bookmarkTag := range bookmarkTags {
+		tagsId = append(tagsId, bookmarkTag.TagID)
+	}
+
+	return tagsId, nil
+}
+
+func (r *BookmarkRepository) RemoveTagAssociations(bookmarkID uint, tagIDs []uint) error {
+	var bookmarkTags models.BookmarkTag
+
+	if len(tagIDs) == 0 {
+		return nil
+	}
+
+	err := r.db.Model(&models.BookmarkTag{}).Where("bookmark_id = ?", bookmarkID).Where("tag_id IN ?", tagIDs).Delete(&bookmarkTags).Error
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *BookmarkRepository) AddTagAssociations(bookmarkID uint, tagIDs []uint) error {
+
+	if len(tagIDs) == 0 {
+		return nil
+	}
+
+	var newTagAssociation []models.BookmarkTag
+
+	for _, tagId := range tagIDs {
+
+		newTagAssociation = append(newTagAssociation, models.BookmarkTag{
+			BookmarkID: bookmarkID,
+			TagID:      tagId,
+		})
+	}
+
+	err := r.db.Create(&newTagAssociation).Error
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func CalculateTagDifferences(currentIDs, newIDs []uint) (toRemove, toAdd []uint) {
+	currentSet := make(map[uint]struct{}, len(currentIDs))
+
+	for _, id := range currentIDs {
+		currentSet[id] = struct{}{}
+	}
+
+	newSet := make(map[uint]struct{}, len(newIDs))
+
+	for _, id := range newIDs {
+		newSet[id] = struct{}{}
+	}
+
+	for _, id := range currentIDs {
+		if _, exists := newSet[id]; !exists {
+			toRemove = append(toRemove, id)
+		}
+	}
+
+	for _, id := range newIDs {
+		if _, exists := currentSet[id]; !exists {
+			toAdd = append(toAdd, id)
+		}
+	}
+
+	return
+}
