@@ -2,11 +2,18 @@ package services
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/repositories"
 	"gorm.io/gorm"
+)
+
+var (
+	ErrTagAlreadyExists = errors.New("ya existe un tag con ese título")
+	ErrTagNotFound      = errors.New("tag no encontrado")
+	ErrTagUnauthorized  = errors.New("no tienes permiso para modificar este tag")
 )
 
 type TagService struct {
@@ -83,4 +90,78 @@ func (s *TagService) FindOrCreateTags(tagNames []string, userID string) ([]model
 	}
 
 	return tags, nil
+}
+
+func (s *TagService) CreateTagService(title string, userID string) (*models.Tag, error) {
+	ctx := context.Background()
+
+	// Verificar si ya existe un tag con ese título para este usuario
+	existingTag, err := s.repo.FindByTitleAndUserID(title, userID)
+
+	if err == nil && existingTag != nil {
+		return nil, ErrTagAlreadyExists
+	}
+
+	// Si el error no es "record not found", es un error real
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	// Crear el nuevo tag
+	newTag := models.Tag{
+		Title:  strings.TrimSpace(title),
+		UserID: userID,
+	}
+
+	if err := s.repo.Create(&newTag); err != nil {
+		return nil, err
+	}
+
+	// Invalidar caché de tags del usuario
+	_ = s.cacheService.InvalidateTagsCache(ctx, userID)
+
+	return &newTag, nil
+}
+
+func (s *TagService) UpdateTagService(tagID string, title string, userID string) (*models.Tag, error) {
+	ctx := context.Background()
+
+	// Buscar el tag por ID
+	tag, err := s.repo.FindByID(tagID)
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrTagNotFound
+		}
+		return nil, err
+	}
+
+	// Verificar que el tag pertenece al usuario
+	if tag.UserID != userID {
+		return nil, ErrTagUnauthorized
+	}
+
+	// Verificar que no exista otro tag con el mismo título para este usuario
+	existingTag, err := s.repo.FindByTitleAndUserID(title, userID)
+
+	if err == nil && existingTag != nil && existingTag.ID != tag.ID {
+		return nil, ErrTagAlreadyExists
+	}
+
+	// Si el error no es "record not found", es un error real
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	// Actualizar el título
+	tag.Title = strings.TrimSpace(title)
+
+	if err := s.repo.Update(tag); err != nil {
+		return nil, err
+	}
+
+	// Invalidar caché de tags del usuario
+	_ = s.cacheService.InvalidateTagsCache(ctx, userID)
+
+	return tag, nil
 }

@@ -64,3 +64,19 @@ func (r *TagRepository) FindByTitleAndUserID(title string, userID string) (*mode
 func (r *TagRepository) Create(tag *models.Tag) error {
 	return r.db.Create(tag).Error
 }
+
+func (r *TagRepository) FindByID(id string) (*models.Tag, error) {
+	var tag models.Tag
+
+	err := r.db.Where("id = ?", id).First(&tag).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &tag, nil
+}
+
+func (r *TagRepository) Update(tag *models.Tag) error {
+	return r.db.Save(tag).Error
+}
