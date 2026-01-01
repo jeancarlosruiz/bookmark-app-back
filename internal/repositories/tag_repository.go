@@ -80,3 +80,22 @@ func (r *TagRepository) FindByID(id string) (*models.Tag, error) {
 func (r *TagRepository) Update(tag *models.Tag) error {
 	return r.db.Save(tag).Error
 }
+
+func (r *TagRepository) CountBookmarks(tagID uint) (int64, error) {
+	var count int64
+
+	err := r.db.Table("bookmark_tags").
+		Joins("JOIN bookmarks ON bookmarks.id = bookmark_tags.bookmark_id AND bookmarks.deleted_at IS NULL").
+		Where("bookmark_tags.tag_id = ?", tagID).
+		Count(&count).Error
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *TagRepository) Delete(tag *models.Tag) error {
+	return r.db.Delete(tag).Error
+}

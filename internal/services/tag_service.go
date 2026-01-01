@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	ErrTagAlreadyExists = errors.New("ya existe un tag con ese título")
-	ErrTagNotFound      = errors.New("tag no encontrado")
-	ErrTagUnauthorized  = errors.New("no tienes permiso para modificar este tag")
+	ErrTagAlreadyExists   = errors.New("ya existe un tag con ese título")
+	ErrTagNotFound        = errors.New("tag no encontrado")
+	ErrTagUnauthorized    = errors.New("no tienes permiso para modificar este tag")
+	ErrTagHasBookmarks    = errors.New("no se puede eliminar el tag porque tiene bookmarks asociados")
 )
 
 type TagService struct {
@@ -164,4 +165,44 @@ func (s *TagService) UpdateTagService(tagID string, title string, userID string)
 	_ = s.cacheService.InvalidateTagsCache(ctx, userID)
 
 	return tag, nil
+}
+
+func (s *TagService) DeleteTagService(tagID string, userID string) error {
+	ctx := context.Background()
+
+	// Buscar el tag por ID
+	tag, err := s.repo.FindByID(tagID)
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrTagNotFound
+		}
+		return err
+	}
+
+	// Verificar que el tag pertenece al usuario
+	if tag.UserID != userID {
+		return ErrTagUnauthorized
+	}
+
+	// Verificar que el tag no tenga bookmarks asociados
+	count, err := s.repo.CountBookmarks(tag.ID)
+
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return ErrTagHasBookmarks
+	}
+
+	// Eliminar el tag (soft delete)
+	if err := s.repo.Delete(tag); err != nil {
+		return err
+	}
+
+	// Invalidar caché de tags del usuario
+	_ = s.cacheService.InvalidateTagsCache(ctx, userID)
+
+	return nil
 }

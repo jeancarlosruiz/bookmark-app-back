@@ -37,5 +37,6 @@ func Setup(router *gin.Engine) {
 		protectedGroup.GET("/tags/:user_id", tagCtrl.FindTagsByUserID)
 		protectedGroup.POST("/tags", middleware.Validator[validator.CreateTag](), tagCtrl.CreateTag)
 		protectedGroup.PUT("/tags/:id", middleware.Validator[validator.UpdateTag](), tagCtrl.UpdateTag)
+		protectedGroup.DELETE("/tags/:id", tagCtrl.DeleteTag)
 	}
 }

@@ -131,3 +131,42 @@ func (ctrl *TagController) UpdateTag(c *gin.Context) {
 		"data":    tag,
 	})
 }
+
+func (ctrl *TagController) DeleteTag(c *gin.Context) {
+	tagID := c.Param("id")
+	userID := c.GetString("user_id")
+
+	err := ctrl.service.DeleteTagService(tagID, userID)
+
+	if err != nil {
+		if errors.Is(err, services.ErrTagNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		if errors.Is(err, services.ErrTagUnauthorized) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		if errors.Is(err, services.ErrTagHasBookmarks) {
+			c.JSON(http.StatusConflict, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error al eliminar el tag: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Tag eliminado exitosamente",
+	})
+}
