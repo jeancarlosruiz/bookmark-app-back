@@ -135,7 +135,7 @@ func (r *BookmarkRepository) UpdateBookmarkByID(id uint, userID string, update m
 
 	var bookmark models.Bookmarks
 
-	err := r.db.Where("id = ? AND user_id = ?", id, userID).Save(update).Error
+	err := r.db.Model(&models.Bookmarks{}).Where("id = ? AND user_id = ?", id, userID).Updates(update).Error
 
 	if err != nil {
 
@@ -261,32 +261,4 @@ func (r *BookmarkRepository) AddTagAssociations(bookmarkID uint, tagIDs []uint) 
 	}
 
 	return nil
-}
-
-func CalculateTagDifferences(currentIDs, newIDs []uint) (toRemove, toAdd []uint) {
-	currentSet := make(map[uint]struct{}, len(currentIDs))
-
-	for _, id := range currentIDs {
-		currentSet[id] = struct{}{}
-	}
-
-	newSet := make(map[uint]struct{}, len(newIDs))
-
-	for _, id := range newIDs {
-		newSet[id] = struct{}{}
-	}
-
-	for _, id := range currentIDs {
-		if _, exists := newSet[id]; !exists {
-			toRemove = append(toRemove, id)
-		}
-	}
-
-	for _, id := range newIDs {
-		if _, exists := currentSet[id]; !exists {
-			toAdd = append(toAdd, id)
-		}
-	}
-
-	return
 }
