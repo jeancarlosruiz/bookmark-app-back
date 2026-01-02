@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,8 +12,6 @@ var validate = validator.New()
 func Validator[T any]() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload T
-
-		fmt.Println("Este son los datos", payload)
 
 		if err := c.ShouldBindJSON(&payload); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -45,7 +42,13 @@ func Validator[T any]() gin.HandlerFunc {
 func formatValidationErrors(err error) map[string]string {
 	errors := make(map[string]string)
 
-	for _, err := range err.(validator.ValidationErrors) {
+	validationErrors, ok := err.(validator.ValidationErrors)
+
+	if !ok {
+		errors["_error"] = "Error de validacion inesperado"
+	}
+
+	for _, err := range validationErrors {
 		fieldName := err.Field()
 
 		switch err.Tag() {

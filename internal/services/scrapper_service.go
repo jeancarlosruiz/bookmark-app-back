@@ -32,7 +32,7 @@ func NewScraperService() *ScraperService {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 0 {
+				if len(via) >= 10 {
 					return errors.New("Demasiados redirects")
 				}
 

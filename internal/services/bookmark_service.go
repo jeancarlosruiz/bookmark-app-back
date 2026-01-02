@@ -27,7 +27,11 @@ func NewBookmarkService() *BookmarkService {
 }
 
 func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (*models.Bookmarks, error) {
-	existing, _ := s.bookmarkRepo.FindByTitleOrURL(data.Title, data.Url, data.UserID)
+	existing, err := s.bookmarkRepo.FindByTitleOrURL(data.Title, data.Url, data.UserID)
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
 
 	if existing != nil {
 		return nil, ErrBookmarkAlreadyExists
@@ -173,7 +177,7 @@ func (s *BookmarkService) FindArchivedByUserIDWithTagService(userID string, sort
 	sortBookmarks(bookmarks, sortParam)
 
 	if pagination != nil {
-		paginatedBookmarks, metadata := PaginateBookmarks(cachedBookmarks, *pagination)
+		paginatedBookmarks, metadata := PaginateBookmarks(bookmarks, *pagination)
 
 		return paginatedBookmarks, metadata, nil
 	}
@@ -183,10 +187,26 @@ func (s *BookmarkService) FindArchivedByUserIDWithTagService(userID string, sort
 
 }
 
-func (s *BookmarkService) FindBookmarksByTagsService(tags []string, userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
+func (s *BookmarkService) FindBookmarksByTagsService(tags string, userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
+
+	var tagList = strings.Split(tags, ",")
+
+	var searchList []string
+
+	for _, tag := range tagList {
+
+		tag = strings.TrimSpace(strings.ToLower(tag))
+
+		if tag == "" {
+			continue
+		}
+
+		searchList = append(searchList, tag)
+
+	}
 
 	emptyMetadata := models.PaginationMetadata{}
-	bookmarks, err := s.bookmarkRepo.FindByTags(tags, userID)
+	bookmarks, err := s.bookmarkRepo.FindByTags(searchList, userID)
 
 	if err == gorm.ErrRecordNotFound {
 		return nil, emptyMetadata, ErrBookmarksNotFound

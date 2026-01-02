@@ -3,7 +3,6 @@ package controllers
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -187,7 +186,7 @@ func (ctrl *BookmarkController) GetArchivedBookmarkByUserID(c *gin.Context) {
 
 // Mejorar
 func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
-	query := c.Query("q")
+	tagsQuery := c.Query("q")
 	userID := c.GetString("user_id")
 	// Leer el parámetro sort del query string (ej: ?q=tag1,tag2&sort=created)
 	sortParam := c.DefaultQuery("sort", "")
@@ -202,23 +201,7 @@ func (ctrl *BookmarkController) SearchBookmarkByTags(c *gin.Context) {
 		pagination = &params
 	}
 
-	var tagList = strings.Split(query, ",")
-
-	var searchList []string
-
-	for _, tag := range tagList {
-
-		tag = strings.TrimSpace(strings.ToLower(tag))
-
-		if tag == "" {
-			continue
-		}
-
-		searchList = append(searchList, tag)
-
-	}
-
-	bookmarks, paginationMetadata, err := ctrl.service.FindBookmarksByTagsService(searchList, userID, sortParam, pagination)
+	bookmarks, paginationMetadata, err := ctrl.service.FindBookmarksByTagsService(tagsQuery, userID, sortParam, pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -305,25 +288,6 @@ func (ctrl *BookmarkController) DeleteBookmark(c *gin.Context) {
 		return
 	}
 
-	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
-
-	if err != nil {
-
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "No se encontro bookmark con este ID",
-			})
-
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Erro al encontrar el bookmark" + err.Error(),
-		})
-
-		return
-	}
-
 	_, err = ctrl.service.SoftDeleteBookmarkByIDService(uint(bookmarkID), userID)
 
 	if err != nil {
@@ -352,25 +316,6 @@ func (ctrl *BookmarkController) UpdateBookmark(c *gin.Context) {
 			"message": "Formato de ID invalido",
 			"error":   err.Error(),
 		})
-		return
-	}
-
-	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
-
-	if err != nil {
-
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "No se encontro bookmark con este id",
-			})
-
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Error al encontrar el bookmark" + err.Error(),
-		})
-
 		return
 	}
 
@@ -429,25 +374,6 @@ func (ctrl *BookmarkController) IncrementVisitCountController(c *gin.Context) {
 		return
 	}
 
-	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
-
-	if err != nil {
-
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "No se encontro bookmark con este id",
-			})
-
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Error al encontrar el bookmark" + err.Error(),
-		})
-
-		return
-	}
-
 	bookmarkUpdated, err := ctrl.service.IncrementVisitCountService(uint(bookmarkID), userID)
 
 	if err != nil {
@@ -488,25 +414,6 @@ func (ctrl *BookmarkController) TogglePinnedByIDController(c *gin.Context) {
 			"message": "Formato de ID invalido",
 			"error":   err.Error(),
 		})
-		return
-	}
-
-	_, err = ctrl.service.FindByIDWithTagsService(uint(bookmarkID), userID)
-
-	if err != nil {
-
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "No se encontro bookmark con este id",
-			})
-
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Error al encontrar el bookmark" + err.Error(),
-		})
-
 		return
 	}
 
