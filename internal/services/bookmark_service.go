@@ -579,7 +579,7 @@ func calculateTagDifferences(currentIDs, newIDs []uint) (toRemove, toAdd []uint)
 }
 
 var (
-	ErrBookmarkAlreadyExists    = errors.New("bookmark with this title or URL already exists")
-	ErrBookmarksNotFound        = errors.New("Bookmarks not found")
-	ErrBookmarkURLAlreadyExists = errors.New("bookmark with this URL already exists for this user")
+	ErrBookmarkAlreadyExists    = errors.New("bookmark already exists")
+	ErrBookmarksNotFound        = errors.New("bookmarks not found")
+	ErrBookmarkURLAlreadyExists = errors.New("URL already exists")
 )

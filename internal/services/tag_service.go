@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	ErrTagAlreadyExists   = errors.New("ya existe un tag con ese título")
-	ErrTagNotFound        = errors.New("tag no encontrado")
-	ErrTagUnauthorized    = errors.New("no tienes permiso para modificar este tag")
-	ErrTagHasBookmarks    = errors.New("no se puede eliminar el tag porque tiene bookmarks asociados")
+	ErrTagAlreadyExists = errors.New("tag already exists")
+	ErrTagNotFound      = errors.New("tag not found")
+	ErrTagUnauthorized  = errors.New("unauthorized to modify tag")
+	ErrTagHasBookmarks  = errors.New("tag has associated bookmarks")
 )
 
 type TagService struct {
