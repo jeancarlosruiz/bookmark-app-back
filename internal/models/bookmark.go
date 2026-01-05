@@ -11,7 +11,7 @@ type Bookmarks struct {
 	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deletedAt"`
-	Title       string         `gorm:"not null" json:"title"`
+	Title       string         `gorm:"not null;uniqueIndex:idx_user_title" json:"title"`
 	Url         string         `gorm:"not null;uniqueIndex:idx_user_url" json:"url"`
 	Favicon     string         `json:"favicon"`
 	Description string         `json:"description"`
