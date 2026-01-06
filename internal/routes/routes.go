@@ -9,10 +9,14 @@ import (
 
 func Setup(router *gin.Engine) {
 	protectedGroup := router.Group("/api")
+	internal := router.Group("/internal")
+
 	bookmarkCtrl := controllers.NewBookmarkController()
 	tagCtrl := controllers.NewTagController()
-	// Ponerlo al final
+	migrationController := controllers.NewMigrationController()
+
 	protectedGroup.Use(middleware.Protect)
+	internal.Use(middleware.InternalAPIAUTH())
 
 	// Agrupar todas las rutas con el middleware deseado
 	{
@@ -38,5 +42,9 @@ func Setup(router *gin.Engine) {
 		protectedGroup.GET("/tags/:user_id", tagCtrl.FindTagsByUserID)
 		protectedGroup.PUT("/tags/:id", middleware.Validator[validator.UpdateTag](), tagCtrl.UpdateTag)
 		protectedGroup.DELETE("/tags/:id", tagCtrl.DeleteTag)
+
+		// Migration route
+		internal.POST("/migrate", middleware.Protect, migrationController.MigrateUser)
 	}
+
 }
