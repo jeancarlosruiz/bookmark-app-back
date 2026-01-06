@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
@@ -12,12 +13,14 @@ import (
 )
 
 type MigrationService struct {
-	db *gorm.DB
+	db           *gorm.DB
+	cacheService *CacheService
 }
 
 func NewMigrationService() *MigrationService {
 	return &MigrationService{
-		db: database.DB,
+		db:           database.DB,
+		cacheService: &CacheService{},
 	}
 }
 
@@ -69,6 +72,10 @@ func (s *MigrationService) MigrateUser(ctx context.Context, anonymousUserID, aut
 	if err != nil {
 		return nil, err
 	}
+
+	// invalidate user cache
+	context := context.Background()
+	_ = s.cacheService.InvalidateUserCache(context, authenticatedUserID)
 
 	log.Printf("Migration completed: %d bookmarks (%d merged), %d tags (%d merged) from user %user %s to %s", result.BookmarksMigrated, result.BookmarksMerged, result.TagsMigrated, result.TagsMerge, anonymousUserID, authenticatedUserID)
 
@@ -197,8 +204,30 @@ func (s *MigrationService) migrateBookmarks(tx *gorm.DB, fromUserID, toUserID st
 			// Aggregate visit counts: sum both
 			newVisitCount := existingBookmark.VisitCount + anonBookmark.VisitCount
 
-			if err := tx.Model(existingBookmark).Update("visit_count", newVisitCount).Error; err != nil {
-				return 0, 0, fmt.Errorf("failed to update visit count for bookmark '%s': %w", anonBookmark.Url, err)
+			// Update the last visited
+			var lastVisitedUpdated *time.Time
+
+			switch {
+			case existingBookmark.LastVisited == nil:
+				lastVisitedUpdated = anonBookmark.LastVisited
+
+			case anonBookmark.LastVisited == nil:
+				lastVisitedUpdated = existingBookmark.LastVisited
+
+			case anonBookmark.LastVisited.After(*existingBookmark.LastVisited):
+				lastVisitedUpdated = anonBookmark.LastVisited
+
+			default:
+				lastVisitedUpdated = existingBookmark.LastVisited
+			}
+
+			updates := make(map[string]interface{})
+
+			updates["visit_count"] = newVisitCount
+			updates["last_visited"] = lastVisitedUpdated
+
+			if err := tx.Model(existingBookmark).Updates(updates).Error; err != nil {
+				return 0, 0, fmt.Errorf("failed to update visit and last visited for bookmark '%s': %w", anonBookmark.Url, err)
 			}
 
 			// Delete the anonymous bookmark (data is now merged)
