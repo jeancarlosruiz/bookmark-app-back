@@ -37,22 +37,34 @@ func (r *BookmarkRepository) FindByTitleOrURL(title string, url string, userID s
 }
 
 func normalizeURL(raw string) (string, error) {
-	u, err := url.Parse(strings.TrimSpace(raw))
+	raw = strings.TrimSpace(raw)
+
+	// 1️⃣ Asegurar scheme
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+
+	u, err := url.Parse(raw)
 	if err != nil {
 		return "", err
 	}
 
+	// 2️⃣ Normalizaciones seguras
+	u.Scheme = "https" // fuerza https
 	u.Fragment = ""
 	u.RawQuery = ""
 
 	u.Host = strings.ToLower(u.Host)
 	u.Host = strings.TrimPrefix(u.Host, "www.")
 
-	if u.Path != "/" {
-		u.Path = strings.TrimSuffix(u.Path, "/")
+	// 3️⃣ Path consistente
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	if u.Path == "" {
+		u.Path = "/"
 	}
 
-	return u.String(), nil
+	// 4️⃣ Construcción manual (NO u.String())
+	return u.Scheme + "://" + u.Host + u.Path, nil
 }
 
 func (r *BookmarkRepository) FindByURL(url string, userID string) (*models.Bookmarks, error) {
