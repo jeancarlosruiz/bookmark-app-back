@@ -8,6 +8,7 @@ import (
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/models"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/repositories"
+	"github.com/jeancarlosruiz/bookmark-app-back/internal/utils"
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/validator"
 	"gorm.io/gorm"
 )
@@ -27,7 +28,13 @@ func NewBookmarkService() *BookmarkService {
 }
 
 func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (*models.Bookmarks, error) {
-	existing, err := s.bookmarkRepo.FindByTitleOrURL(data.Title, data.Url, data.UserID)
+	// Normalize the URL to ensure consistent storage and comparison
+	normalizedURL, err := utils.NormalizeURL(data.Url)
+	if err != nil {
+		return nil, err
+	}
+
+	existing, err := s.bookmarkRepo.FindByTitleOrURL(data.Title, normalizedURL, data.UserID)
 
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
@@ -45,7 +52,7 @@ func (s *BookmarkService) CreateBookmarkService(data validator.CreateBookmark) (
 
 	bookmark := &models.Bookmarks{
 		Title:       data.Title,
-		Url:         data.Url,
+		Url:         normalizedURL,
 		Description: data.Description,
 		UserID:      data.UserID,
 		Favicon:     data.Favicon,
@@ -344,7 +351,12 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 	}
 
 	if data.Url != nil {
-		updates["url"] = *data.Url
+		// Normalize the URL to ensure consistent storage and comparison
+		normalizedURL, err := utils.NormalizeURL(*data.Url)
+		if err != nil {
+			return nil, err
+		}
+		updates["url"] = normalizedURL
 	}
 
 	if data.Description != nil {
@@ -391,7 +403,13 @@ func (s *BookmarkService) UpdateBookmarkService(id uint, userID string, data val
 }
 
 func (s *BookmarkService) CheckURLExists(url string, userID string) error {
-	_, err := s.bookmarkRepo.FindByURL(url, userID)
+	// Normalize the URL to ensure consistent comparison
+	normalizedURL, err := utils.NormalizeURL(url)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.bookmarkRepo.FindByURL(normalizedURL, userID)
 
 	if err == nil {
 		// El bookmark existe

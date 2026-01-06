@@ -1,8 +1,6 @@
 package repositories
 
 import (
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
