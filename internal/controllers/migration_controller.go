@@ -22,6 +22,7 @@ func NewMigrationController() *MigrationController {
 // defines the expected request body structure
 type MigrateUserRequest struct {
 	AnonymousUserID string `json:"anonymous_user_id" binding:"required"`
+	NewUserID       string `json:"new_user_id" binding:"required"`
 }
 
 func (mc *MigrationController) MigrateUser(c *gin.Context) {
@@ -36,16 +37,16 @@ func (mc *MigrationController) MigrateUser(c *gin.Context) {
 		return
 	}
 
-	authenticatedUserID := c.GetString("user_id")
-	if authenticatedUserID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "User Id not found in token context",
-		})
+	// authenticatedUserID := c.GetString("user_id")
+	// if authenticatedUserID == "" {
+	// 	c.JSON(http.StatusUnauthorized, gin.H{
+	// 		"error": "User Id not found in token context",
+	// 	})
+	//
+	// 	return
+	// }
 
-		return
-	}
-
-	result, err := mc.migrationService.MigrateUser(c.Request.Context(), req.AnonymousUserID, authenticatedUserID)
+	result, err := mc.migrationService.MigrateUser(c.Request.Context(), req.AnonymousUserID, req.NewUserID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
