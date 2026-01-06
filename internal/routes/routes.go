@@ -44,6 +44,9 @@ func Setup(router *gin.Engine) {
 		protectedGroup.DELETE("/tags/:id", tagCtrl.DeleteTag)
 
 		// Migration route
+	}
+
+	{
 		internal.POST("/migrate", middleware.Protect, migrationController.MigrateUser)
 	}
 
