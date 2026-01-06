@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/jeancarlosruiz/bookmark-app-back/internal/database"
@@ -34,9 +36,34 @@ func (r *BookmarkRepository) FindByTitleOrURL(title string, url string, userID s
 
 }
 
+func normalizeURL(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
+	}
+
+	u.Fragment = ""
+	u.RawQuery = ""
+
+	u.Host = strings.ToLower(u.Host)
+	u.Host = strings.TrimPrefix(u.Host, "www.")
+
+	if u.Path != "/" {
+		u.Path = strings.TrimSuffix(u.Path, "/")
+	}
+
+	return u.String(), nil
+}
+
 func (r *BookmarkRepository) FindByURL(url string, userID string) (*models.Bookmarks, error) {
 	var bookmark models.Bookmarks
-	err := r.db.Where("url = ? AND user_id = ?", url, userID).First(&bookmark).Error
+	urlNormalized, urlErr := normalizeURL(url)
+
+	if urlErr != nil {
+		return nil, urlErr
+	}
+
+	err := r.db.Where("url = ? AND user_id = ?", urlNormalized, userID).First(&bookmark).Error
 
 	if err != nil {
 		return nil, err
