@@ -157,10 +157,10 @@ func (s *MigrationService) migrateBookmarks(tx *gorm.DB, fromUserID, toUserID st
 		return 0, 0, nil
 	}
 
-	// get all bookmarks from authenticated user
+	// get all bookmarks from authenticated user (including soft-deleted to avoid unique constraint violations)
 	var authenticatedBookmarks []models.Bookmarks
 
-	if err := tx.Preload("Tags").Where("user_id = ?", toUserID).Find(&authenticatedBookmarks).Error; err != nil {
+	if err := tx.Unscoped().Preload("Tags").Where("user_id = ?", toUserID).Find(&authenticatedBookmarks).Error; err != nil {
 		return 0, 0, fmt.Errorf("failed to fetch authenticated user bookmarks: %w", err)
 	}
 
@@ -182,60 +182,80 @@ func (s *MigrationService) migrateBookmarks(tx *gorm.DB, fromUserID, toUserID st
 		// check if authenticated user has this url
 		if existingBookmark, exists := authenticatedBookmarkMap[normalizedURL]; exists {
 
-			//user already bookmarked this url
-			existingTagsIDs := make(map[uint]bool)
+			// If the existing bookmark is soft-deleted, permanently delete it and transfer the anonymous one
+			if existingBookmark.DeletedAt.Valid {
+				// Permanently delete the soft-deleted bookmark
+				if err := tx.Unscoped().Delete(existingBookmark).Error; err != nil {
+					return 0, 0, fmt.Errorf("failed to permanently delete soft-deleted bookmark '%s': %w", existingBookmark.Url, err)
+				}
 
-			// merge tags: add anonymous bookmarks's tags to existing bookmark
-			for _, tag := range existingBookmark.Tags {
-				existingTagsIDs[tag.ID] = true
-			}
+				// Transfer ownership of anonymous bookmark
+				if err := tx.Model(&anonBookmark).Update("user_id", toUserID).Error; err != nil {
+					return 0, 0, fmt.Errorf("failed to update user_id for bookmark '%s': %w", anonBookmark.Url, err)
+				}
 
-			// Add tags from anonymous bookmark that dont already exist
-			for _, tag := range anonBookmark.Tags {
+				// Update map for future conflict detection
+				authenticatedBookmarkMap[normalizedURL] = &anonBookmark
 
-				//Associate this tag with the existing bookmark
-				if !existingTagsIDs[tag.ID] {
-					if err := tx.Model(existingBookmark).Association("Tags").Append(&tag); err != nil {
-						return 0, 0, fmt.Errorf("failed to merge tags for bookmark '%s': %w", anonBookmark.Url, err)
+				migrated++
+			} else {
+				// Existing bookmark is active - merge data
+
+				//user already bookmarked this url
+				existingTagsIDs := make(map[uint]bool)
+
+				// merge tags: add anonymous bookmarks's tags to existing bookmark
+				for _, tag := range existingBookmark.Tags {
+					existingTagsIDs[tag.ID] = true
+				}
+
+				// Add tags from anonymous bookmark that dont already exist
+				for _, tag := range anonBookmark.Tags {
+
+					//Associate this tag with the existing bookmark
+					if !existingTagsIDs[tag.ID] {
+						if err := tx.Model(existingBookmark).Association("Tags").Append(&tag); err != nil {
+							return 0, 0, fmt.Errorf("failed to merge tags for bookmark '%s': %w", anonBookmark.Url, err)
+						}
 					}
 				}
+
+				// Aggregate visit counts: sum both
+				newVisitCount := existingBookmark.VisitCount + anonBookmark.VisitCount
+
+				// Update the last visited
+				var lastVisitedUpdated *time.Time
+
+				switch {
+				case existingBookmark.LastVisited == nil:
+					lastVisitedUpdated = anonBookmark.LastVisited
+
+				case anonBookmark.LastVisited == nil:
+					lastVisitedUpdated = existingBookmark.LastVisited
+
+				case anonBookmark.LastVisited.After(*existingBookmark.LastVisited):
+					lastVisitedUpdated = anonBookmark.LastVisited
+
+				default:
+					lastVisitedUpdated = existingBookmark.LastVisited
+				}
+
+				updates := make(map[string]interface{})
+
+				updates["visit_count"] = newVisitCount
+				updates["last_visited"] = lastVisitedUpdated
+
+				if err := tx.Model(existingBookmark).Updates(updates).Error; err != nil {
+					return 0, 0, fmt.Errorf("failed to update visit and last visited for bookmark '%s': %w", anonBookmark.Url, err)
+				}
+
+				// Delete the anonymous bookmark (data is now merged)
+				if err := tx.Unscoped().Delete(&anonBookmark).Error; err != nil {
+					return 0, 0, fmt.Errorf("failed to delete anonymous bookmark '%s': %w", anonBookmark.Url)
+				}
+
+				merged++
 			}
-
-			// Aggregate visit counts: sum both
-			newVisitCount := existingBookmark.VisitCount + anonBookmark.VisitCount
-
-			// Update the last visited
-			var lastVisitedUpdated *time.Time
-
-			switch {
-			case existingBookmark.LastVisited == nil:
-				lastVisitedUpdated = anonBookmark.LastVisited
-
-			case anonBookmark.LastVisited == nil:
-				lastVisitedUpdated = existingBookmark.LastVisited
-
-			case anonBookmark.LastVisited.After(*existingBookmark.LastVisited):
-				lastVisitedUpdated = anonBookmark.LastVisited
-
-			default:
-				lastVisitedUpdated = existingBookmark.LastVisited
-			}
-
-			updates := make(map[string]interface{})
-
-			updates["visit_count"] = newVisitCount
-			updates["last_visited"] = lastVisitedUpdated
-
-			if err := tx.Model(existingBookmark).Updates(updates).Error; err != nil {
-				return 0, 0, fmt.Errorf("failed to update visit and last visited for bookmark '%s': %w", anonBookmark.Url, err)
-			}
-
-			// Delete the anonymous bookmark (data is now merged)
-			if err := tx.Unscoped().Delete(&anonBookmark).Error; err != nil {
-				return 0, 0, fmt.Errorf("failed to delete anonymous bookmark '%s': %w", anonBookmark.Url)
-			}
-
-			merged++
 		} else {
 			// No Conflict: just transfer the ownership to authenticated user
 			// Update the bookmark user id
