@@ -20,6 +20,7 @@ func NewBookmarkRepository() *BookmarkRepository {
 
 func (r *BookmarkRepository) FindByTitleOrURL(title string, url string, userID string) (*models.Bookmarks, error) {
 	var bookmark models.Bookmarks
+
 	err := r.db.Where(&models.Bookmarks{
 		Title:  title,
 		Url:    url,

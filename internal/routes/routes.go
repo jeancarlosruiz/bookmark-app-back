@@ -20,16 +20,12 @@ func Setup(router *gin.Engine) {
 
 	// Agrupar todas las rutas con el middleware deseado
 	{
-		// Users
-		protectedGroup.GET("/users", controllers.GetUsers)
-
 		//Bookmarks
-		protectedGroup.GET("/bookmark/title", bookmarkCtrl.SearchBookmarkByTitle)
+		protectedGroup.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
 		protectedGroup.GET("/bookmark/tags", bookmarkCtrl.SearchBookmarkByTags)
 		protectedGroup.GET("/bookmark/preview", bookmarkCtrl.PreviewMetadata)
 		protectedGroup.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
 		protectedGroup.GET("/bookmark/:id", bookmarkCtrl.GetBookmarkByID)
-		protectedGroup.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
 		protectedGroup.GET("/bookmark/user/:user_id/archived", bookmarkCtrl.GetArchivedBookmarkByUserID)
 		protectedGroup.PUT("/bookmark/update/:id", middleware.Validator[validator.UpdateBookmark](), bookmarkCtrl.UpdateBookmark)
 		protectedGroup.PUT("/bookmark/view-count/:id", bookmarkCtrl.IncrementVisitCountController)
