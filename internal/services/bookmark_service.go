@@ -237,29 +237,9 @@ func (s *BookmarkService) FindBookmarksByTagsService(tags string, userID string,
 }
 
 func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string, sortParam string, pagination *models.PaginationParams) ([]models.Bookmarks, models.PaginationMetadata, error) {
-	ctx := context.Background()
 	emptyMetadata := models.PaginationMetadata{}
 
-	// CACHE HIT PATH: Intentar obtener desde caché
-	cachedBookmarks, hit, err := s.cacheService.GetBookmarksFromCache(ctx, userID)
-	if hit && err == nil {
-		// Filtrar por título en memoria (case-insensitive, como ILIKE '%title%')
-		filtered := filterByTitle(cachedBookmarks, title)
-
-		// Ordenar en memoria según sortParam
-		sortBookmarks(filtered, sortParam)
-
-		if pagination != nil {
-			paginatedBookmarks, metadata := PaginateBookmarks(filtered, *pagination)
-			return paginatedBookmarks, metadata, nil
-		}
-
-		return filtered, emptyMetadata, nil
-	}
-
-	// CACHE MISS PATH: Cargar TODOS los bookmarks del usuario desde DB
-	// y cachearlos para futuras búsquedas
-	allBookmarks, err := s.bookmarkRepo.FindByUserIDWithTags(userID)
+	bookmarks, err := s.bookmarkRepo.FindBookmarkByTitle(title, userID)
 
 	if err == gorm.ErrRecordNotFound {
 		return nil, emptyMetadata, ErrBookmarksNotFound
@@ -269,22 +249,14 @@ func (s *BookmarkService) FindBookmarkByTitleService(title string, userID string
 		return nil, emptyMetadata, err
 	}
 
-	// Guardar TODOS los bookmarks en caché para reutilizar en futuras búsquedas
-	// No retornamos error si el caché falla - la app continúa funcionando
-	_ = s.cacheService.SetBookmarksCache(ctx, userID, allBookmarks)
-
-	// Filtrar por título en memoria
-	filtered := filterByTitle(allBookmarks, title)
-
-	// Ordenar en memoria según sortParam antes de retornar
-	sortBookmarks(filtered, sortParam)
+	sortBookmarks(bookmarks, sortParam)
 
 	if pagination != nil {
-		paginatedBookmarks, metadata := PaginateBookmarks(filtered, *pagination)
+		paginatedBookmarks, metadata := PaginateBookmarks(bookmarks, *pagination)
 		return paginatedBookmarks, metadata, nil
 	}
 
-	return filtered, emptyMetadata, nil
+	return bookmarks, emptyMetadata, nil
 }
 
 func (s *BookmarkService) SoftDeleteBookmarkByIDService(id uint, userID string) (*models.Bookmarks, error) {
