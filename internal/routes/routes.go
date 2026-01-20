@@ -24,6 +24,7 @@ func Setup(router *gin.Engine) {
 		protectedGroup.GET("/bookmark/user/:user_id", bookmarkCtrl.GetBookmarkByUserID)
 		protectedGroup.GET("/bookmark/tags", bookmarkCtrl.SearchBookmarkByTags)
 		protectedGroup.GET("/bookmark/preview", bookmarkCtrl.PreviewMetadata)
+		protectedGroup.GET("/bookmark/title", bookmarkCtrl.SearchBookmarkByTitle)
 		protectedGroup.POST("/bookmark", middleware.Validator[validator.CreateBookmark](), bookmarkCtrl.CreateBookmark)
 		protectedGroup.GET("/bookmark/:id", bookmarkCtrl.GetBookmarkByID)
 		protectedGroup.GET("/bookmark/user/:user_id/archived", bookmarkCtrl.GetArchivedBookmarkByUserID)
