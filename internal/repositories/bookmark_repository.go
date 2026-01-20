@@ -96,7 +96,6 @@ func (r *BookmarkRepository) FindByTags(tags []string, userID string) ([]models.
 		Joins("JOIN tags t ON t.id = bt.tag_id").
 		Where("LOWER(t.title) IN ?", tags).
 		Where("bookmarks.user_id = ?", userID).
-		Where("bookmarks.is_archived = ?", false).
 		Find(&bookmarks).Error
 
 	if err != nil {
