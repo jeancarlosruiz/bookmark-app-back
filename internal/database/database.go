@@ -21,12 +21,6 @@ func Connect() error {
 		return err
 	}
 
-	// Set search path to include both public and neon_auth schemas
-	// This allows PostgreSQL to resolve cross-schema foreign key constraints
-	if err := db.Exec("SET search_path TO public, neon_auth").Error; err != nil {
-		return err
-	}
-
 	DB = db
 	return nil
 }
