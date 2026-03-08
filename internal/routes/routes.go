@@ -8,6 +8,11 @@ import (
 )
 
 func Setup(router *gin.Engine) {
+
+	//Health check - publico, sin autenticacion
+	healthCtrl := controllers.NewHealthController()
+	router.GET("/health", healthCtrl.HealthCheck)
+
 	protectedGroup := router.Group("/api")
 	internal := router.Group("/internal")
 
