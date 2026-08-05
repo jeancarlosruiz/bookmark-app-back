@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -84,9 +85,28 @@ func Protect(c *gin.Context) {
 
 	if err != nil {
 		log.Printf("❌ Error al validar JWT: %v", err)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Invalid or expired token",
-		})
+
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Tu sesión ha expirado. Vuelve a iniciar sesión.",
+				"code":  "TOKEN_EXPIRED",
+			})
+		case errors.Is(err, jwt.ErrTokenMalformed),
+			errors.Is(err, jwt.ErrTokenSignatureInvalid),
+			errors.Is(err, jwt.ErrTokenNotValidYet),
+			errors.Is(err, jwt.ErrTokenInvalidClaims):
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Tu sesión no es válida. Vuelve a iniciar sesión.",
+				"code":  "TOKEN_INVALID",
+			})
+		default:
+			// Errores de infraestructura: JWKS no alcanzable, key no encontrada, etc.
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "No pudimos verificar tu sesión. Intenta de nuevo en unos minutos.",
+				"code":  "TOKEN_VERIFICATION_FAILED",
+			})
+		}
 		c.Abort()
 		return
 	}
